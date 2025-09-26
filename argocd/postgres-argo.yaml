@@ -1,0 +1,29 @@
+# postgres-argo.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: postgres-argo
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://charts.bitnami.com/bitnami
+    chart: postgresql
+    targetRevision: 15.5.33
+    helm:
+      parameters:
+        - name: auth.username
+          value: demo
+        - name: auth.password
+          value: demo123
+        - name: auth.database
+          value: mydb
+        - name: primary.service.type
+          value: NodePort
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
