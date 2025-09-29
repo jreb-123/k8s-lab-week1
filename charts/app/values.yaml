@@ -9,10 +9,10 @@ replicaCount: 1
 image:
 <<<<<<< HEAD
   repository: jrebaza01/app-week1
-  tag: "0bd21dbc5e475426cf88484778bec0b1ceb95944"
+  tag: "b511f332db9ece3e6a16e9c0e6054111b8cf1ada"
 =======
   repository: jreb-123/app-week1
-  tag: "aa21c1b37135194c3fe6d3c9be343022f4fb7420"
+  tag: "b511f332db9ece3e6a16e9c0e6054111b8cf1ada"
 >>>>>>> 1d8997242cbb25534f3a6f5f7722d185b0093ebc
   pullPolicy: IfNotPresent
  
