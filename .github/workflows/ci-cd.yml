@@ -43,3 +43,22 @@ jobs:
           git add charts/app/values.yaml
           git commit -m "Update image tag to ${{ github.sha }}"
           git push
+
+          # --- app-consolidation ---
+      - name: Build and push app-consolidation image
+        run: |
+          docker build -t jrebaza01/myapp-consolidation:${{ github.sha }} ./app/app-consolidation
+          docker push jrebaza01/myapp-consolidation:${{ github.sha }}
+
+      - name: Update Helm values for app-consolidation
+        run: |
+          sed -i "s|repository:.*|repository: jrebaza01/myapp-consolidation|" ./charts/app-consolidation/values.yaml
+          sed -i "s|tag:.*|tag: ${{ github.sha }}|" ./charts/app-consolidation/values.yaml
+
+      - name: Commit and push updated values.yaml (app-consolidation)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ./charts/app-consolidation/values.yaml
+          git commit -m "Update app-consolidation image tag to ${{ github.sha }}"
+          git push
