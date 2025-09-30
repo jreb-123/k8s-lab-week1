@@ -1,34 +1,54 @@
+# azure-pipelines.yml
 trigger:
-- main
-
-pool:
-  name: Default  # agente local
+  branches:
+    include:
+      - main
+      - lab/**
 
 variables:
-- group: docker-credentials
+  imageName: jrebaza01/myapp       # Nombre de tu imagen en Docker Hub
+  dockerUsername: $(dockerUsername) # Variable secreta definida en Library
+  dockerPassword: $(dockerPassword) # Variable secreta definida en Library
 
-steps:
-- checkout: self
+jobs:
+- job: BuildAndPush
+  displayName: Build and Push Docker Image
+  pool:
+    name: Default                  # Tu agente local
+  steps:
 
-- script: echo "🚀 Build & Push Docker Image desde Azure DevOps"
-  displayName: "Inicio del pipeline"
+  # 1️⃣ Checkout del repo
+  - checkout: self
 
-- task: Docker@2
-  displayName: 'Login en Docker Hub'
-  inputs:
-    command: login
-    containerRegistry: 'DockerHubService'
-  env:
-    DOCKERHUB_USERNAME: $(DOCKERHUB_USERNAME)
-    DOCKERHUB_TOKEN: $(DOCKERHUB_TOKEN)
+  # 2️⃣ Login en Docker Hub
+  - script: |
+      echo Logging in to Docker Hub
+      docker login -u %dockerUsername% -p %dockerPassword%
+    displayName: Docker Login
+    env:
+      dockerUsername: $(dockerUsername)
+      dockerPassword: $(dockerPassword)
 
-- script: |
-    docker build -t $(imageName):$(Build.SourceVersion) .
-    docker tag $(imageName):$(Build.SourceVersion) $(imageName):latest
-  displayName: 'Build Docker image'
+  # 3️⃣ Build y Push Docker
+  - script: |
+      echo Building Docker image
+      docker build -t %imageName%:%Build.BuildId% ./app
+      echo Pushing Docker image
+      docker push %imageName%:%Build.BuildId%
+    displayName: Build and Push Docker Image
+    env:
+      imageName: $(imageName)
 
-- script: |
-    docker push $(imageName):$(Build.SourceVersion)
-    docker push $(imageName):latest
-  displayName: 'Push a Docker Hub'
+  # 4️⃣ Actualizar Helm values.yaml
+  - powershell: |
+      (Get-Content ./charts/app/values.yaml) -replace 'tag: .*', 'tag: $(Build.BuildId)' | Set-Content ./charts/app/values.yaml
+    displayName: Update Helm values.yaml
 
+  # 5️⃣ Commit y Push para ArgoCD
+  - powershell: |
+      git config user.name "azure-pipelines[bot]"
+      git config user.email "azure-pipelines[bot]@users.noreply.github.com"
+      git add ./charts/app/values.yaml
+      git commit -m "Update image tag to $(Build.BuildId)"
+      git push origin main
+    displayName: Commit updated Helm values.yaml
