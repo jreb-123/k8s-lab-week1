@@ -27,7 +27,7 @@ stages:
         $username = $env:DOCKER_USERNAME
         $password = $env:DOCKER_PASSWORD
         $password | docker login -u $username --password-stdin
-        displayName: Docker Login
+      displayName: Docker Login
 
     - powershell: |
         $tag = "$(Build.BuildId)-$(Build.SourceVersion.Substring(0,7))"
