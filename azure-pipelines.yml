@@ -1,54 +1,31 @@
-trigger:
-  branches:
-    include:
-      - main
-      - lab/**
+pool:
+  name: 'Default'  # tu pool self-hosted
 
 variables:
-  imageName: myapp-consolidation   # Cambia al nombre de tu imagen
-  dockerUsername: $(dockerUsername) # Variable de library
-  dockerPassword: $(dockerPassword) # Variable de library (PAT Docker Hub)
-  githubToken: $(GITHUB_TOKEN)      # Token de GitHub con permisos de push
+  imageName: 'jrebaza01/app-week3'
+  tag: $(Build.SourceVersion)
 
-pool:
-  name: Default  # Tu agente personalizado
+steps:
+- task: Checkout@1
 
-stages:
-- stage: BuildAndPush
-  displayName: Build and Push Docker
-  jobs:
-  - job: BuildDocker
-    displayName: Build Docker Image
-    steps:
-    - checkout: self
+- task: Docker@2
+  displayName: 'Login to Docker Hub'
+  inputs:
+    command: login
+    containerRegistry: 'DockerHubService'
+    loginServer: 'https://index.docker.io/v1/'
 
-    - powershell: |
-        Write-Host "Logging in to Docker Hub..."
-        $dockerLoginPassword = $env:DOCKER_PASSWORD
-        $dockerLoginPassword | docker login --username $env:DOCKER_USERNAME --password-stdin
-      displayName: Docker Login
+- task: Docker@2
+  displayName: 'Build Docker image'
+  inputs:
+    command: build
+    Dockerfile: '$(Build.SourcesDirectory)\app\Dockerfile'
+    tags: '$(imageName):$(tag)'
+    buildContext: '$(Build.SourcesDirectory)\app'
 
-    - powershell: |
-        $tag = "$(Build.BuildId)-$(Build.SourceVersion.Substring(0,7))"
-        Write-Host "Building Docker image with tag: $tag"
-        docker build -t $(dockerUsername)/$(imageName):$tag ./app
-        docker push $(dockerUsername)/$(imageName):$tag
-        echo "##vso[task.setvariable variable=IMAGE_TAG]$tag"
-      displayName: Build & Push Docker Image
+- task: Docker@2
+  displayName: 'Push Docker image'
+  inputs:
+    command: push
+    tags: '$(imageName):$(tag)'
 
-    - powershell: |
-        $tag = "$(IMAGE_TAG)"
-        Write-Host "Updating Helm values.yaml with tag $tag..."
-        (Get-Content .\charts\app\values.yaml) -replace 'repository:.*','repository: $(dockerUsername)/$(imageName)' |
-            Set-Content .\charts\app\values.yaml
-        (Get-Content .\charts\app\values.yaml) -replace 'tag:.*','tag: ' + $tag |
-            Set-Content .\charts\app\values.yaml
-      displayName: Update Helm values.yaml
-
-    - powershell: |
-        git config user.name "Azure DevOps"
-        git config user.email "azure-pipelines@users.noreply.github.com"
-        git add .\charts\app\values.yaml
-        git commit -m "Update image tag to $(IMAGE_TAG)"
-        git push https://$(githubToken)@github.com/jreb-123/k8s-lab-from-scratch.git HEAD:main
-      displayName: Commit & Push Helm Changes
