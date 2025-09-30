@@ -24,10 +24,9 @@ stages:
 
     - powershell: |
         Write-Host "Logging in to Docker Hub..."
-        $username = "$(dockerUsername)"
-        $password = "$(dockerPassword)"
-        $securePass = ConvertTo-SecureString $password -AsPlainText -Force
-        $securePass | docker login -u $username --password-stdin
+        $username = $env:dockerUsername
+        $password = $env:dockerPassword
+        $password | docker login -u $username --password-stdin
       displayName: Docker Login
 
     - powershell: |
