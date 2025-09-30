@@ -4,7 +4,7 @@ trigger:
       - main
 
 pool:
-  name: 'Default'
+  name: Default
 
 variables:
   imageName: 'jrebaza01/app-week3'   # Cambia al nombre de tu repositorio Docker
