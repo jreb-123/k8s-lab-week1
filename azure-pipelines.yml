@@ -39,3 +39,16 @@ steps:
     containerRegistry: 'DockerHubService'   # Importante mantener esto
     tags: |
       $(imageName):$(tag)
+
+# 5️⃣ Actualizar values.yaml y hacer push a GitHub (para ArgoCD)
+- powershell: |
+    Write-Host "Actualizando values.yaml con el nuevo tag..."
+    (Get-Content "$(Build.SourcesDirectory)/charts/app/values.yaml") `
+    -replace 'tag: .*', "tag: $(tag)" | Set-Content "$(Build.SourcesDirectory)/charts/app/values.yaml"
+
+    git config user.email "ci@azurepipelines.com"
+    git config user.name "Azure Pipelines"
+    git add charts/app/values.yaml
+    git commit -m "Update image tag to $(tag)"
+    git push origin main
+  displayName: "Update Helm values and push to GitHub"
