@@ -55,4 +55,3 @@ steps:
 
     git push origin $(Build.SourceBranchName)
   displayName: "Update Helm values and push to GitHub"
-
