@@ -1,3 +1,49 @@
+trigger:
+  branches:
+    include:
+      - main
+      - dev
+      - prod
+
+pool:
+  name: Default   # Tu agente local en Windows 10
+
+variables:
+  imageName: 'jrebaza01/app-week1'    # Tu repo en Docker Hub
+  tag: $(Build.SourceVersion)         # Tag dinámico basado en commit
+  TargetBranch: 'dev'                 # Cambiar a 'prod' para pipeline de producción
+
+steps:
+# 1️⃣ Checkout del código
+- checkout: self
+
+# 2️⃣ Login en Docker Hub usando tu Service Connection
+- task: Docker@2
+  displayName: 'Login to Docker Hub'
+  inputs:
+    command: login
+    containerRegistry: 'DockerHubService'   # Tu conexión ya creada
+
+# 3️⃣ Build de la imagen Docker
+- task: Docker@2
+  displayName: 'Build Docker image'
+  inputs:
+    command: build
+    Dockerfile: '$(Build.SourcesDirectory)/app/Dockerfile'
+    buildContext: '$(Build.SourcesDirectory)/app'
+    tags: |
+      $(imageName):$(tag)
+
+# 4️⃣ Push de la imagen a Docker Hub
+- task: Docker@2
+  displayName: 'Push Docker image'
+  inputs:
+    command: push
+    containerRegistry: 'DockerHubService'
+    tags: |
+      $(imageName):$(tag)
+
+# 5️⃣ Actualizar values.yaml y hacer commit en la rama correspondiente
 - powershell: |
     Write-Host "Actualizando values.yaml con el nuevo tag..."
 
@@ -9,18 +55,36 @@
     git config user.email "ci@azurepipelines.com"
     git config user.name "Azure Pipelines"
 
-    # Define rama destino (dev o prod)
+    # Trae la rama destino
     $branch = "$(TargetBranch)"
     Write-Host "Usando la rama: $branch"
-
-    # Trae la rama del remoto
     git fetch origin $branch
     git checkout $branch
     git pull origin $branch
 
     # Commit & push
     git add "$(Build.SourcesDirectory)/charts/app/values.yaml"
-    git commit -m "Update image tag to $(tag)" -m "CI/CD Azure Pipelines"
+    git commit -m "Update image tag to $(tag) [CI/CD Azure Pipelines]"
     git push origin $branch
   displayName: "Update Helm values and push to GitHub"
+
+# 6️⃣ (Opcional) Desplegar a Kubernetes usando Helm
+- task: HelmInstaller@1
+  displayName: 'Install Helm'
+  inputs:
+    helmVersionToInstall: 'latest'
+
+- task: HelmDeploy@0
+  displayName: 'Deploy to Kubernetes'
+  inputs:
+    connectionType: 'None'  # Usando kubeconfig local
+    command: 'upgrade'
+    chartType: 'FilePath'
+    chartPath: '$(Build.SourcesDirectory)/charts/app'
+    releaseName: 'app-$(TargetBranch)'
+    namespace: '$(TargetBranch)'
+    overrideValues: |
+      image.tag=$(tag)
+    install: true
+
 
