@@ -1,4 +1,4 @@
-replicaCount: 3
+replicaCount: 1
 
 image:
   repository: jrebaza01/app-week1
@@ -9,5 +9,5 @@ service:
   type: ClusterIP
   port: 80
 
-environment: prod
+environment: dev
 
