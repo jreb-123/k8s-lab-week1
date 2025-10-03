@@ -12,24 +12,33 @@ variables:
     value: 'jrebaza01/app-week1'
   - name: tag
     value: $(Build.SourceVersion)
+
+  # 💡 Estas dos variables se calculan dinámicamente
   - name: releaseName
-    value: $[eq(variables['Build.SourceBranchName'], 'dev') ? 'app-dev' : 'app-prod']
+    ${{ if eq(variables['Build.SourceBranchName'], 'dev') }}:
+      value: 'app-dev'
+    ${{ else }}:
+      value: 'app-prod'
+
   - name: namespace
-    value: $[eq(variables['Build.SourceBranchName'], 'dev') ? 'dev' : 'prod']
+    ${{ if eq(variables['Build.SourceBranchName'], 'dev') }}:
+      value: 'dev'
+    ${{ else }}:
+      value: 'prod'
 
 steps:
-# 1️⃣ Checkout
+# 1️⃣ Checkout del código
 - checkout: self
   clean: true
 
-# 2️⃣ Login Docker Hub
+# 2️⃣ Login en Docker Hub
 - task: Docker@2
   displayName: 'Login to Docker Hub'
   inputs:
     command: login
     containerRegistry: 'DockerHubService'
 
-# 3️⃣ Build Docker image
+# 3️⃣ Build de la imagen Docker
 - task: Docker@2
   displayName: 'Build Docker image'
   inputs:
@@ -39,7 +48,7 @@ steps:
     tags: |
       $(imageName):$(tag)
 
-# 4️⃣ Push Docker image
+# 4️⃣ Push de la imagen a Docker Hub
 - task: Docker@2
   displayName: 'Push Docker image'
   inputs:
@@ -48,7 +57,7 @@ steps:
     tags: |
       $(imageName):$(tag)
 
-# 5️⃣ Update values.yaml y push a GitHub
+# 5️⃣ Actualizar values.yaml con el nuevo tag y hacer push a GitHub
 - powershell: |
     Write-Host "Actualizando values.yaml con el nuevo tag $(tag)..."
 
@@ -64,7 +73,7 @@ steps:
     git push origin $(Build.SourceBranchName)
   displayName: "Update Helm values and push to GitHub"
 
-# 6️⃣ Deploy con Helm
+# 6️⃣ Desplegar con Helm
 - task: HelmDeploy@0
   displayName: "Deploy app with Helm"
   inputs:
