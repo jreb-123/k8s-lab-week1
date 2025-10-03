@@ -2,7 +2,7 @@ replicaCount: 3
 
 image:
   repository: jrebaza01/app-week1
-  tag: b0cbe01cc9375b41c9be3f45a4ec0a561492cdb8
+  tag: c1985b642cf29fd2efb82eb89b10df781d827ec2
   pullPolicy: IfNotPresent
 
 service:
