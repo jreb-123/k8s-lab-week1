@@ -1,0 +1,13 @@
+replicaCount: 2
+
+image:
+  repository: jrebaza01/app-week1
+  tag: "5bdeb99e53c330c92a82342af68b6bcbdaaec0af"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+
+environment: prod
+
