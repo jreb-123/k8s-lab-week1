@@ -3,26 +3,26 @@ trigger:
     include:
       - main
       - dev
-      - prod
 
 pool:
-  name: Default   # Tu agente local en Windows 10
+  name: Default   # Tu agente local
 
 variables:
-  imageName: 'jrebaza01/app-week1'    # Tu repo en Docker Hub
-  tag: $(Build.SourceVersion)         # Tag dinámico basado en commit
-  TargetBranch: 'dev'                 # Cambiar a 'prod' para pipeline de producción
+  imageName: 'jrebaza01/app-week1'   # Tu repo en Docker Hub
+  tag: $(Build.SourceVersion)
+  releaseName: $[ eq(variables['Build.SourceBranchName'], 'refs/heads/dev') ? 'app-dev' : 'app-prod' ]
+  namespace: $[ eq(variables['Build.SourceBranchName'], 'refs/heads/dev') ? 'dev' : 'prod' ]
 
 steps:
 # 1️⃣ Checkout del código
 - checkout: self
 
-# 2️⃣ Login en Docker Hub usando tu Service Connection
+# 2️⃣ Login en Docker Hub
 - task: Docker@2
   displayName: 'Login to Docker Hub'
   inputs:
     command: login
-    containerRegistry: 'DockerHubService'   # Tu conexión ya creada
+    containerRegistry: 'DockerHubService'  # Tu conexión ya creada
 
 # 3️⃣ Build de la imagen Docker
 - task: Docker@2
@@ -43,48 +43,35 @@ steps:
     tags: |
       $(imageName):$(tag)
 
-# 5️⃣ Actualizar values.yaml y hacer commit en la rama correspondiente
+# 5️⃣ Actualizar values.yaml con el nuevo tag
 - powershell: |
     Write-Host "Actualizando values.yaml con el nuevo tag..."
+    $valuesPath = "$(Build.SourcesDirectory)/envs/$env:BUILD_SOURCEBRANCHNAME/values.yaml"
+    (Get-Content "$valuesPath") -replace 'tag: .*', "tag: $(tag)" | Set-Content "$valuesPath"
 
-    # Actualiza el tag en values.yaml
-    (Get-Content "$(Build.SourcesDirectory)/charts/app/values.yaml") `
-      -replace 'tag: .*', "tag: $(tag)" | Set-Content "$(Build.SourcesDirectory)/charts/app/values.yaml"
-
-    # Configura git
     git config user.email "ci@azurepipelines.com"
     git config user.name "Azure Pipelines"
-
-    # Trae la rama destino
-    $branch = "$(TargetBranch)"
-    Write-Host "Usando la rama: $branch"
-    git fetch origin $branch
-    git checkout $branch
-    git pull origin $branch
-
-    # Commit & push
-    git add "$(Build.SourcesDirectory)/charts/app/values.yaml"
-    git commit -m "Update image tag to $(tag) [CI/CD Azure Pipelines]"
-    git push origin $branch
+    git add "$valuesPath"
+    git commit -m "Update image tag to $(tag)" || Write-Host "No changes to commit"
+    git push origin $env:BUILD_SOURCEBRANCHNAME
   displayName: "Update Helm values and push to GitHub"
 
-# 6️⃣ (Opcional) Desplegar a Kubernetes usando Helm
-- task: HelmInstaller@1
-  displayName: 'Install Helm'
-  inputs:
-    helmVersionToInstall: 'latest'
-
+# 6️⃣ Deploy con Helm
 - task: HelmDeploy@0
   displayName: 'Deploy to Kubernetes'
   inputs:
-    connectionType: 'None'  # Usando kubeconfig local
+    connectionType: 'None'
+    kubernetesServiceEndpoint: ''
     command: 'upgrade'
     chartType: 'FilePath'
     chartPath: '$(Build.SourcesDirectory)/charts/app'
-    releaseName: 'app-$(TargetBranch)'
-    namespace: '$(TargetBranch)'
+    releaseName: '$(releaseName)'
+    namespace: '$(namespace)'
+    valueFile: '$(Build.SourcesDirectory)/envs/$(Build.SourceBranchName)/values.yaml'
     overrideValues: |
+      image.repository=$(imageName)
       image.tag=$(tag)
     install: true
+    wait: true
 
 
