@@ -2,7 +2,7 @@ replicaCount: 2
 # This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
 image:
   repository: jrebaza01/myapp-consolidation
-  tag: 52f7d45424301ef9d66502819b49dd4203a39e26
+  tag: 65b8d3534858be347c351d80a404b4cb7cd23dcd
 
   pullPolicy: IfNotPresent
  
