@@ -5,27 +5,31 @@ trigger:
       - dev
 
 pool:
-  name: Default   # Tu agente local en Windows 10
+  name: Default   # Tu agente local
 
 variables:
-  imageName: 'jrebaza01/app-week1'
-  tag: $(Build.SourceVersion)
-  releaseName: $[eq(variables['Build.SourceBranchName'], 'dev') ? 'app-dev' : 'app-prod']
-  namespace: $[eq(variables['Build.SourceBranchName'], 'dev') ? 'dev' : 'prod']
+  - name: imageName
+    value: 'jrebaza01/app-week1'
+  - name: tag
+    value: $(Build.SourceVersion)
+  - name: releaseName
+    value: $[eq(variables['Build.SourceBranchName'], 'dev') ? 'app-dev' : 'app-prod']
+  - name: namespace
+    value: $[eq(variables['Build.SourceBranchName'], 'dev') ? 'dev' : 'prod']
 
 steps:
-# 1️⃣ Checkout del código
+# 1️⃣ Checkout
 - checkout: self
   clean: true
 
-# 2️⃣ Login en Docker Hub
+# 2️⃣ Login Docker Hub
 - task: Docker@2
   displayName: 'Login to Docker Hub'
   inputs:
     command: login
-    containerRegistry: 'DockerHubService'   # Tu conexión existente
+    containerRegistry: 'DockerHubService'
 
-# 3️⃣ Build de la imagen Docker
+# 3️⃣ Build Docker image
 - task: Docker@2
   displayName: 'Build Docker image'
   inputs:
@@ -35,7 +39,7 @@ steps:
     tags: |
       $(imageName):$(tag)
 
-# 4️⃣ Push de la imagen a Docker Hub
+# 4️⃣ Push Docker image
 - task: Docker@2
   displayName: 'Push Docker image'
   inputs:
@@ -44,29 +48,27 @@ steps:
     tags: |
       $(imageName):$(tag)
 
-# 5️⃣ Actualizar values.yaml con el nuevo tag y hacer push a GitHub
+# 5️⃣ Update values.yaml y push a GitHub
 - powershell: |
-    Write-Host "Actualizando charts/app/values.yaml con el tag $(tag)..."
+    Write-Host "Actualizando values.yaml con el nuevo tag $(tag)..."
 
-    (Get-Content "$(Build.SourcesDirectory)/charts/app/values.yaml") `
-    -replace 'tag: .*', "tag: $(tag)" | Set-Content "$(Build.SourcesDirectory)/charts/app/values.yaml"
+    $filePath = "$(Build.SourcesDirectory)/charts/app/values.yaml"
+    (Get-Content $filePath) -replace 'tag: .*', "tag: $(tag)" | Set-Content $filePath
 
     git config user.email "ci@azurepipelines.com"
     git config user.name "Azure Pipelines"
 
-    # ⚡ Checkout explícito de la rama para evitar detached HEAD
     git checkout $(Build.SourceBranchName)
-
     git add charts/app/values.yaml
     git commit -m "Update image tag to $(tag)"
     git push origin $(Build.SourceBranchName)
   displayName: "Update Helm values and push to GitHub"
 
-# 6️⃣ Deploy a Kubernetes con Helm
+# 6️⃣ Deploy con Helm
 - task: HelmDeploy@0
   displayName: "Deploy app with Helm"
   inputs:
-    connectionType: 'None'              # Si usas Kind local
+    connectionType: 'None'
     command: 'upgrade'
     chartType: 'FilePath'
     chartPath: '$(Build.SourcesDirectory)/charts/app'
