@@ -12,6 +12,7 @@ variables:
   tag: $(Build.SourceVersion)
 
 steps:
+
 # 1️⃣ Definir variables dinámicas según rama
 - script: |
     if [ "$(Build.SourceBranchName)" == "refs/heads/dev" ]; then
@@ -62,20 +63,15 @@ steps:
   env:
     GIT_TERMINAL_PROMPT: 1
 
-# 5️⃣ Despliegue en Kubernetes con Helm
-- task: HelmDeploy@0
+# 5️⃣ Despliegue en Kubernetes con Helm usando shell (funciona con variables dinámicas)
+- script: |
+    echo "Deploying to Kubernetes..."
+    /usr/local/bin/helm upgrade --namespace $(namespace) \
+      --install \
+      --set image.repository=$(imageName),image.tag=$(tag) \
+      --create-namespace \
+      $(releaseName) $(Build.SourcesDirectory)/charts/app
   displayName: 'Deploy to Kubernetes via Helm'
-  inputs:
-    connectionType: 'Kubernetes Service Connection'
-    kubernetesServiceConnection: 'aks-kubeconfig-connection'  # <- Reemplaza con tu Service Connection
-    command: 'upgrade'
-    chartType: 'FilePath'
-    chartPath: 'charts/app'
-    releaseName: '$(releaseName)'
-    namespace: '$(namespace)'
-    overrideValues: 'image.repository=$(imageName),image.tag=$(tag)'
-    install: true
-    waitForExecution: true
-    arguments: '--create-namespace'
+
 
 
