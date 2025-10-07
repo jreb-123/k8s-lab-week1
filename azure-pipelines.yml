@@ -54,6 +54,7 @@ steps:
 
     git config user.email "pipeline@azuredevops.local"
     git config user.name "Azure Pipelines"
+    git remote set-url origin https://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@github.com/jreb-123/k8s-lab-week1.git
     git add $envPath
     git commit -m "Update image tag to $(tag)" || echo "No changes to commit"
     git pull origin $(Build.SourceBranchName) --rebase
