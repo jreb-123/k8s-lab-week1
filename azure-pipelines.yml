@@ -5,7 +5,7 @@ trigger:
       - main
 
 pool:
-  name: default   # Tu agente Ubuntu
+  name: default   # Agente Ubuntu
 
 variables:
   imageName: 'jrebaza01/app-week1'
@@ -58,20 +58,22 @@ steps:
     git add $envPath
     git commit -m "Update image tag to $(tag)" || echo "No changes to commit"
 
-    # Push usando token seguro de GitHub
-    git remote set-url origin https://jreb-123:$G_TOKEN@github.com/jreb-123/k8s-lab-week1.git
+    # Configurar git para usar token seguro
+    git config credential.helper store
+    echo "https://jreb-123:$(G_TOKEN)@github.com" > ~/.git-credentials
+
     git pull origin $(Build.SourceBranchName) --rebase
     git push origin HEAD:$(Build.SourceBranchName)
   displayName: 'Update Helm values.yaml and push to GitHub securely'
   env:
-    G_TOKEN: $(G_TOKEN)   # <- GH_TOKEN creado en Library como secret
+    G_TOKEN: $(G_TOKEN)   # <- GH token desde Library como secret
 
 # 5️⃣ Deploy a Kubernetes via Helm
 - task: HelmDeploy@0
   displayName: 'Deploy to Kubernetes via Helm'
   inputs:
     connectionType: 'Kubernetes Service Connection'
-    kubernetesServiceConnection: 'aks-kubeconfig-connection'  # <- tu Service Connection
+    kubernetesServiceConnection: 'aks-kubeconfig-connection'
     command: 'upgrade'
     chartType: 'FilePath'
     chartPath: 'charts/app'
@@ -90,3 +92,4 @@ steps:
       helm rollback $(releaseName) 0 -n $(namespace)
     )
   displayName: 'Check deployment / Rollback if needed'
+
