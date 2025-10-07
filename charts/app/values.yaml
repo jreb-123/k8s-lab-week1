@@ -7,11 +7,7 @@ replicaCount: 2
 # This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
 image:
   repository: jrebaza01/app-week1
-<<<<<<< HEAD
   tag: 806b7563dac0c5164860ebec4e9618cd8dee7488
-=======
-  tag: "d249c8e8dc1b708e74c3cb9774401e45a8e084ce"
->>>>>>> main
   pullPolicy: IfNotPresent
  
 service:

@@ -1,44 +1,18 @@
 trigger:
   branches:
     include:
-      - main
       - dev
+      - main
 
 pool:
-  name: Default   # Tu agente local
+  name: default  # tu agente Ubuntu auto hospedado
 
 variables:
-  - name: imageName
-    value: 'jrebaza01/app-week1'
-  - name: tag
-    value: $(Build.SourceVersion)
-
-  # 💡 Estas dos variables se calculan dinámicamente
-  - name: releaseName
-    ${{ if eq(variables['Build.SourceBranchName'], 'dev') }}:
-      value: 'app-dev'
-    ${{ else }}:
-      value: 'app-prod'
-
-  - name: namespace
-    ${{ if eq(variables['Build.SourceBranchName'], 'dev') }}:
-      value: 'dev'
-    ${{ else }}:
-      value: 'prod'
+  imageName: 'jrebaza01/app-week1'
+  tag: $(Build.SourceVersion)
 
 steps:
-# 1️⃣ Checkout del código
-- checkout: self
-  clean: true
-
-# 2️⃣ Login en Docker Hub
-- task: Docker@2
-  displayName: 'Login to Docker Hub'
-  inputs:
-    command: login
-    containerRegistry: 'DockerHubService'
-
-# 3️⃣ Build de la imagen Docker
+# 1️⃣ Build de la imagen Docker
 - task: Docker@2
   displayName: 'Build Docker image'
   inputs:
@@ -48,41 +22,69 @@ steps:
     tags: |
       $(imageName):$(tag)
 
-# 4️⃣ Push de la imagen a Docker Hub
+# 2️⃣ Push a Docker Hub
 - task: Docker@2
-  displayName: 'Push Docker image'
+  displayName: 'Push Docker image to Docker Hub'
   inputs:
     command: push
-    containerRegistry: 'DockerHubService'
     tags: |
       $(imageName):$(tag)
 
-# 5️⃣ Actualizar values.yaml con el nuevo tag y hacer push a GitHub
-- powershell: |
-    Write-Host "Actualizando values.yaml con el nuevo tag $(tag)..."
-
-    $filePath = "$(Build.SourcesDirectory)/charts/app/values.yaml"
-    (Get-Content $filePath) -replace 'tag: .*', "tag: $(tag)" | Set-Content $filePath
-
-    git config user.email "ci@azurepipelines.com"
-    git config user.name "Azure Pipelines"
-
-    git checkout $(Build.SourceBranchName)
-    git add charts/app/values.yaml
-    git commit -m "Update image tag to $(tag)"
-    git push origin $(Build.SourceBranchName)
-  displayName: "Update Helm values and push to GitHub"
-
-# 6️⃣ Desplegar con Helm
-- task: HelmDeploy@0
-  displayName: "Deploy app with Helm"
+# 3️⃣ Actualiza el tag en values.yaml (rama dev → dev, main → prod)
+- task: Bash@3
+  displayName: 'Update Helm values and push to GitHub'
   inputs:
-    connectionType: 'None'
+    targetType: 'inline'
+    script: |
+      echo "=== 🔧 Actualizando values.yaml con el nuevo tag $(tag) ==="
+
+      branchName=$(Build.SourceBranchName)
+      if [[ "$branchName" == "dev" ]]; then
+        envPath="envs/dev/values.yaml"
+        releaseName="app-dev"
+        namespace="dev"
+      else
+        envPath="envs/prod/values.yaml"
+        releaseName="app-prod"
+        namespace="prod"
+      fi
+
+      echo "Usando entorno: $branchName → archivo: $envPath"
+
+      # Sustituimos el tag
+      sed -i "s/tag: .*/tag: $(tag)/" "$envPath"
+
+      # Config git
+      git config user.email "pipeline@azuredevops.local"
+      git config user.name "Azure Pipelines"
+
+      git add "$envPath"
+      git commit -m "Update image tag to $(tag)" || echo "⚠️ No hay cambios que commitear"
+      git pull origin "$branchName" --rebase
+      git push origin HEAD:"$branchName"
+
+      echo "✅ values.yaml actualizado correctamente."
+
+# 4️⃣ Despliegue en AKS con Helm según rama
+- task: HelmDeploy@0
+  displayName: 'Deploy to AKS via Helm'
+  inputs:
+    connectionType: 'Kubernetes Service Connection'
+    kubernetesServiceConnection: 'aks-kubeconfig-connection'  # ⚠️ cambia por tu service connection real
     command: 'upgrade'
     chartType: 'FilePath'
-    chartPath: '$(Build.SourcesDirectory)/charts/app'
+    chartPath: 'charts/app'
     releaseName: '$(releaseName)'
     namespace: '$(namespace)'
-    overrideValues: |
-      image.tag=$(tag)
+    overrideValues: 'image.repository=$(imageName),image.tag=$(tag)'
     install: true
+    waitForExecution: false
+    arguments: '--create-namespace'
+
+# 5️⃣ Confirmación visual (solo logging informativo)
+- script: |
+    echo "🚀 Despliegue completado en el entorno $(namespace)"
+    echo "App: $(releaseName)"
+    echo "Tag: $(tag)"
+  displayName: 'Log de despliegue'
+
