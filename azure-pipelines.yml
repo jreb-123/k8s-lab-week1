@@ -59,12 +59,12 @@ steps:
     git commit -m "Update image tag to $(tag)" || echo "No changes to commit"
 
     # Push usando token seguro de GitHub
-    git remote set-url origin https://jreb-123:$GH_TOKEN@github.com/jreb-123/k8s-lab-week1.git
+    git remote set-url origin https://jreb-123:$G_TOKEN@github.com/jreb-123/k8s-lab-week1.git
     git pull origin $(Build.SourceBranchName) --rebase
     git push origin HEAD:$(Build.SourceBranchName)
   displayName: 'Update Helm values.yaml and push to GitHub securely'
   env:
-    GH_TOKEN: $(GH_TOKEN)   # <- GH_TOKEN creado en Library como secret
+    GH_TOKEN: $(G_TOKEN)   # <- GH_TOKEN creado en Library como secret
 
 # 5️⃣ Deploy a Kubernetes via Helm
 - task: HelmDeploy@0
