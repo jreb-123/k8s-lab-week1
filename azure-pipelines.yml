@@ -33,7 +33,7 @@ steps:
     tags: |
       $(imageName):$(tag)
 
-# 3️⃣ Push Docker image
+# 3️⃣ Push Docker image to Docker Hub
 - task: Docker@2
   displayName: 'Push Docker image to Docker Hub'
   inputs:
@@ -41,7 +41,7 @@ steps:
     tags: |
       $(imageName):$(tag)
 
-# 4️⃣ Update Helm values.yaml y push a GitHub usando token
+# 4️⃣ Update Helm values.yaml and push to GitHub securely
 - script: |
     echo "Updating values.yaml for branch $(Build.SourceBranchName) with tag $(tag)..."
 
@@ -58,13 +58,13 @@ steps:
     git add $envPath
     git commit -m "Update image tag to $(tag)" || echo "No changes to commit"
 
-    # Push usando token seguro
-    git remote set-url origin "https://$GITHUB_TOKEN@github.com/jreb-123/k8s-lab-week1.git"
+    # Push usando token seguro de GitHub
+    git remote set-url origin https://jreb-123:$GH_TOKEN@github.com/jreb-123/k8s-lab-week1.git
     git pull origin $(Build.SourceBranchName) --rebase
     git push origin HEAD:$(Build.SourceBranchName)
-  displayName: 'Update Helm values.yaml and push to GitHub'
+  displayName: 'Update Helm values.yaml and push to GitHub securely'
   env:
-    GITHUB_TOKEN: $(GH_TOKEN)   # GH_TOKEN definido en Library como secret
+    GH_TOKEN: $(GH_TOKEN)   # <- GH_TOKEN creado en Library como secret
 
 # 5️⃣ Deploy a Kubernetes via Helm
 - task: HelmDeploy@0
