@@ -42,7 +42,7 @@ steps:
       $(imageName):$(tag)
 
 # 4️⃣ Actualiza values.yaml y push a GitHub
-- script: |
+-- script: |
     echo "Updating values.yaml for branch $(Build.SourceBranchName) with tag $(tag)..."
 
     if [ "$(Build.SourceBranchName)" == "refs/heads/dev" ]; then
@@ -51,22 +51,21 @@ steps:
       envPath="envs/prod/values.yaml"
     fi
 
-    # Sustituimos el tag anterior
     sed -i "s|tag: .*|tag: $(tag)|" $envPath
 
-    # Configuración git
     git config user.email "pipeline@azuredevops.local"
     git config user.name "Azure Pipelines"
     git add $envPath
     git commit -m "Update image tag to $(tag)" || echo "No changes to commit"
 
     # Push usando token de GitHub
-    git remote set-url origin https://$GITHUB_TOKEN@github.com/jreb-123/k8s-lab-week1.git
+    git remote set-url origin "https://$GITHUB_TOKEN@github.com/jreb-123/k8s-lab-week1.git"
     git pull origin $(Build.SourceBranchName) --rebase
     git push origin HEAD:$(Build.SourceBranchName)
   displayName: 'Update Helm values.yaml and push to GitHub'
   env:
     GITHUB_TOKEN: $(GH_TOKEN)   # <- token secreto creado en Library o pipeline variable
+  # <- token secreto creado en Library o pipeline variable
 
 # 5️⃣ Deploy en Kubernetes con Helm
 - task: HelmDeploy@0
