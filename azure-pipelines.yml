@@ -23,7 +23,7 @@ steps:
     fi
   displayName: 'Set releaseName and namespace dynamically'
 
-# 2️⃣ Build de la imagen Docker
+# 2️⃣ Build Docker image
 - task: Docker@2
   displayName: 'Build Docker image'
   inputs:
@@ -33,7 +33,7 @@ steps:
     tags: |
       $(imageName):$(tag)
 
-# 3️⃣ Push a Docker Hub
+# 3️⃣ Push Docker image
 - task: Docker@2
   displayName: 'Push Docker image to Docker Hub'
   inputs:
@@ -41,8 +41,8 @@ steps:
     tags: |
       $(imageName):$(tag)
 
-# 4️⃣ Actualiza values.yaml y push a GitHub
- - script: |
+# 4️⃣ Update Helm values.yaml y push a GitHub usando token
+- script: |
     echo "Updating values.yaml for branch $(Build.SourceBranchName) with tag $(tag)..."
 
     if [ "$(Build.SourceBranchName)" == "refs/heads/dev" ]; then
@@ -58,15 +58,15 @@ steps:
     git add $envPath
     git commit -m "Update image tag to $(tag)" || echo "No changes to commit"
 
-    # Push usando token de GitHub
+    # Push usando token seguro
     git remote set-url origin "https://$GITHUB_TOKEN@github.com/jreb-123/k8s-lab-week1.git"
     git pull origin $(Build.SourceBranchName) --rebase
     git push origin HEAD:$(Build.SourceBranchName)
   displayName: 'Update Helm values.yaml and push to GitHub'
   env:
-    GITHUB_TOKEN: $(GH_TOKEN)   # <- token secreto creado en Library o pipeline variable
+    GITHUB_TOKEN: $(GH_TOKEN)   # GH_TOKEN definido en Library como secret
 
-# 5️⃣ Deploy en Kubernetes con Helm
+# 5️⃣ Deploy a Kubernetes via Helm
 - task: HelmDeploy@0
   displayName: 'Deploy to Kubernetes via Helm'
   inputs:
@@ -82,7 +82,7 @@ steps:
     waitForExecution: true
     arguments: '--create-namespace'
 
-# 6️⃣ Rollback automático si falla el deploy
+# 6️⃣ Rollback si falla (opcional)
 - script: |
     echo "Checking Helm deployment status..."
     helm status $(releaseName) -n $(namespace) || (
@@ -90,4 +90,3 @@ steps:
       helm rollback $(releaseName) 0 -n $(namespace)
     )
   displayName: 'Check deployment / Rollback if needed'
-
