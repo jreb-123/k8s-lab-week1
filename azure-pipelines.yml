@@ -5,7 +5,7 @@ trigger:
       - main
 
 pool:
-  name: default   # Agente Ubuntu
+  name: default  # Agente Ubuntu
 
 variables:
   imageName: 'jrebaza01/app-week1'
@@ -14,7 +14,7 @@ variables:
 steps:
 # 1️⃣ Variables dinámicas según rama
 - script: |
-    if [ "$(Build.SourceBranchName)" == "refs/heads/dev" ]; then
+    if [ "$(Build.SourceBranchName)" == "dev" ]; then
       echo "##vso[task.setvariable variable=releaseName]app-dev"
       echo "##vso[task.setvariable variable=namespace]dev"
     else
@@ -41,11 +41,11 @@ steps:
     tags: |
       $(imageName):$(tag)
 
-# 4️⃣ Update Helm values.yaml y push a GitHub seguro
+# 4️⃣ Update Helm values.yaml and push to GitHub securely
 - script: |
     echo "Updating values.yaml for branch $(Build.SourceBranchName) with tag $(tag)..."
 
-    if [ "$(Build.SourceBranchName)" == "refs/heads/dev" ]; then
+    if [ "$(Build.SourceBranchName)" == "dev" ]; then
       envPath="envs/dev/values.yaml"
     else
       envPath="envs/prod/values.yaml"
@@ -55,19 +55,18 @@ steps:
 
     git config user.email "pipeline@azuredevops.local"
     git config user.name "Azure Pipelines"
-
     git add $envPath
     git commit -m "Update image tag to $(tag)" || echo "No changes to commit"
 
-    # Configuración temporal del credential helper para usar el token seguro
-    git config credential.helper store
-    echo "https://jreb-123:$(G_TOKEN)@github.com" > ~/.git-credentials
+    # Pull público (sin token)
+    git pull origin $(Build.SourceBranchName) --rebase
 
-    # Push seguro sin exponer token en la URL
+    # Push seguro usando token de Library
+    git remote set-url origin https://jreb-123:$G_TOKEN@github.com/jreb-123/k8s-lab-week1.git
     git push origin HEAD:$(Build.SourceBranchName)
   displayName: 'Update Helm values.yaml and push to GitHub securely'
   env:
-    G_TOKEN: $(G_TOKEN)  # Secret guardado en Library
+    G_TOKEN: $(G_TOKEN)  # <- Variable secreta de Library
 
 # 5️⃣ Deploy a Kubernetes via Helm
 - task: HelmDeploy@0
@@ -85,7 +84,7 @@ steps:
     waitForExecution: true
     arguments: '--create-namespace'
 
-# 6️⃣ Rollback si falla (opcional)
+# 6️⃣ Rollback si falla
 - script: |
     echo "Checking Helm deployment status..."
     helm status $(releaseName) -n $(namespace) || (
@@ -93,4 +92,3 @@ steps:
       helm rollback $(releaseName) 0 -n $(namespace)
     )
   displayName: 'Check deployment / Rollback if needed'
-
