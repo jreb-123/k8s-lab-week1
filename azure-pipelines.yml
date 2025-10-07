@@ -1,3 +1,4 @@
+
 trigger:
   branches:
     include:
@@ -5,18 +6,11 @@ trigger:
       - main
 
 pool:
-  name: default
+  name: default  # tu agente Ubuntu auto hospedado
 
 variables:
   imageName: 'jrebaza01/app-week1'
   tag: $(Build.SourceVersion)
-  releaseName: 'app-prod'
-  namespace: 'prod'
-
-  # Si la rama es dev, cambia release y namespace
-  ${{ if eq(variables['Build.SourceBranchName'], 'dev') }}:
-    releaseName: 'app-dev'
-    namespace: 'dev'
 
 steps:
 # 1️⃣ Build de la imagen Docker
@@ -37,37 +31,47 @@ steps:
     tags: |
       $(imageName):$(tag)
 
-# 3️⃣ Actualiza el tag en el values.yaml del entorno correspondiente
-- task: PowerShell@2
+# 3️⃣ Actualiza el tag en values.yaml (rama dev → dev, main → prod)
+- task: Bash@3
   displayName: 'Update Helm values and push to GitHub'
   inputs:
     targetType: 'inline'
     script: |
-      Write-Host "Actualizando values.yaml con el nuevo tag $(tag)..."
-      $branchName = "$(Build.SourceBranchName)"
-      if ($branchName -eq "refs/heads/dev") {
-        $envPath = "envs/dev/values.yaml"
-      } else {
-        $envPath = "envs/prod/values.yaml"
-      }
+      echo "=== 🔧 Actualizando values.yaml con el nuevo tag $(tag) ==="
 
-      # Sustituimos el tag anterior
-      (Get-Content $envPath) -replace 'tag: .*', "tag: $(tag)" | Set-Content $envPath
+      branchName=$(Build.SourceBranchName)
+      if [[ "$branchName" == "dev" ]]; then
+        envPath="envs/dev/values.yaml"
+        releaseName="app-dev"
+        namespace="dev"
+      else
+        envPath="envs/prod/values.yaml"
+        releaseName="app-prod"
+        namespace="prod"
+      fi
 
-      # Configuración de git
+      echo "Usando entorno: $branchName → archivo: $envPath"
+
+      # Sustituimos el tag
+      sed -i "s/tag: .*/tag: $(tag)/" "$envPath"
+
+      # Config git
       git config user.email "pipeline@azuredevops.local"
       git config user.name "Azure Pipelines"
 
-      git add $envPath
-      git commit -m "Update image tag to $(tag)"
-      git pull origin $branchName --rebase
-      git push origin HEAD:$branchName
+      git add "$envPath"
+      git commit -m "Update image tag to $(tag)" || echo "⚠️ No hay cambios que commitear"
+      git pull origin "$branchName" --rebase
+      git push origin HEAD:"$branchName"
 
-# 4️⃣ Despliegue en Kubernetes con Helm
+      echo "✅ values.yaml actualizado correctamente."
+
+# 4️⃣ Despliegue en AKS con Helm según rama
 - task: HelmDeploy@0
-  displayName: 'Deploy to Kubernetes via Helm'
+  displayName: 'Deploy to AKS via Helm'
   inputs:
-    connectionType: 'None'
+    connectionType: 'Kubernetes Service Connection'
+    kubernetesServiceConnection: 'aks-kubeconfig-connection'  # ⚠️ cambia por tu service connection real
     command: 'upgrade'
     chartType: 'FilePath'
     chartPath: 'charts/app'
@@ -77,3 +81,10 @@ steps:
     install: true
     waitForExecution: false
     arguments: '--create-namespace'
+
+# 5️⃣ Confirmación visual (solo logging informativo)
+- script: |
+    echo "🚀 Despliegue completado en el entorno $(namespace)"
+    echo "App: $(releaseName)"
+    echo "Tag: $(tag)"
+  displayName: 'Log de despliegue'
