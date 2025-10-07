@@ -42,7 +42,7 @@ steps:
       $(imageName):$(tag)
 
 # 4️⃣ Actualiza values.yaml y push a GitHub
--- script: |
+ - script: |
     echo "Updating values.yaml for branch $(Build.SourceBranchName) with tag $(tag)..."
 
     if [ "$(Build.SourceBranchName)" == "refs/heads/dev" ]; then
@@ -65,7 +65,6 @@ steps:
   displayName: 'Update Helm values.yaml and push to GitHub'
   env:
     GITHUB_TOKEN: $(GH_TOKEN)   # <- token secreto creado en Library o pipeline variable
-  # <- token secreto creado en Library o pipeline variable
 
 # 5️⃣ Deploy en Kubernetes con Helm
 - task: HelmDeploy@0
