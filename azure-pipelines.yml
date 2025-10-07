@@ -64,7 +64,7 @@ steps:
     git push origin HEAD:$(Build.SourceBranchName)
   displayName: 'Update Helm values.yaml and push to GitHub securely'
   env:
-    GH_TOKEN: $(G_TOKEN)   # <- GH_TOKEN creado en Library como secret
+    G_TOKEN: $(G_TOKEN)   # <- GH_TOKEN creado en Library como secret
 
 # 5️⃣ Deploy a Kubernetes via Helm
 - task: HelmDeploy@0
