@@ -75,22 +75,17 @@ steps:
     git push origin HEAD:$(Build.SourceBranchName)
   displayName: 'Update Helm values.yaml and push to GitHub via SSH'
 
+# 5️⃣ Deploy to Kubernetes via Helm
+- script: |
+    echo "Deploying release: $(releaseName)"
+    echo "Namespace: $(namespace)"
+    echo "Image: $(imageName):$(tag)"
+    helm upgrade --install $(releaseName) charts/app \
+      --namespace $(namespace) \
+      --create-namespace \
+      --set image.repository=$(imageName),image.tag=$(tag)
+  displayName: 'Deploy to AKS via Helm'
 
-# 5️⃣ Deploy a Kubernetes via Helm
-- task: HelmDeploy@0
-  displayName: 'Deploy to Kubernetes via Helm'
-  inputs:
-    connectionType: 'Kubernetes Service Connection'
-    kubernetesServiceConnection: 'aks-kubeconfig-connection'
-    command: 'upgrade'
-    chartType: 'FilePath'
-    chartPath: 'charts/app'
-    releaseName: '$(releaseName)'
-    namespace: '$(namespace)'
-    overrideValues: 'image.repository=$(imageName),image.tag=$(tag)'
-    install: true
-    waitForExecution: true
-    arguments: '--create-namespace'
 
 # 6️⃣ Rollback si falla
 - script: |
