@@ -1,32 +1,19 @@
 trigger: none
 
 pool:
-  name: default
-
-variables:
-- group: SSH_PRIVATE_KEY   # tu variable group con SSH_PRIVATE_KEY
+  name: 'Default'   # Usa el nombre del pool donde está tu agente
 
 steps:
-- script: |
-    echo "=== Configurando clave SSH ==="
-    mkdir -p ~/.ssh
-    printf "%s\n" "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-    chmod 600 ~/.ssh/id_rsa
+  - script: |
+      echo "=== Verificando conexión SSH ==="
+      ssh -T git@github.com
 
-    eval "$(ssh-agent -s)"
-    ssh-add ~/.ssh/id_rsa
+      echo "=== Probando clonación de repositorio ==="
+      git clone git@github.com:jreb-123.k8s-lab-week.git
 
-    ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-  displayName: 'Setup SSH key'
-  env:
-    SSH_PRIVATE_KEY: $(SSH_PRIVATE_KEY)
+      echo "=== Repositorio clonado correctamente ==="
+    displayName: "Test SSH & GitHub Clone"
 
-- script: |
-    echo "=== Probando conexión a GitHub ==="
-    ssh -T git@github.com || true
-  displayName: 'Test GitHub SSH connection'
-  env:
-    SSH_PRIVATE_KEY: $(SSH_PRIVATE_KEY)
 
 
 
