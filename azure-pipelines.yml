@@ -28,44 +28,33 @@ steps:
 
 # BLOQUE 2: Update Helm values.yaml and push to GitHub via SSH
 - bash: |
-    echo "=== 🔧 Updating values.yaml for branch $(Build.SourceBranchName) with tag $(Build.SourceVersion) ==="
+    echo "=== 🔧 Updating values.yaml for branch $(Build.SourceBranchName) with tag $(tag) ==="
 
-    # Definir el path según la rama
     if [ "$(Build.SourceBranchName)" == "dev" ]; then
       envPath="envs/dev/values.yaml"
     else
       envPath="envs/prod/values.yaml"
     fi
 
-    # Actualizar la etiqueta del contenedor
-    sed -i "s|tag: .*|tag: $(Build.SourceVersion)|" $envPath
+    sed -i "s|tag: .*|tag: $(tag)|" $envPath
 
-    # Configurar usuario Git
     git config user.email "pipeline@azuredevops.local"
     git config user.name "Azure Pipelines"
-
-    # Commit cambios (si hay)
     git add $envPath
-    git commit -m "Update image tag to $(Build.SourceVersion)" || echo "No changes to commit"
+    git commit -m "Update image tag to $(tag)" || echo "No changes to commit"
 
-    # ✅ Setup ssh-agent y añadir clave
+    # ✅ Setup ssh-agent properly
     mkdir -p ~/.ssh
-    echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+    printf "%b" "$(SSH_PRIVATE_KEY)" | base64 --decode > ~/.ssh/id_rsa
     chmod 600 ~/.ssh/id_rsa
+
     eval "$(ssh-agent -s)"
     ssh-add ~/.ssh/id_rsa
-
-    # Añadir GitHub al known_hosts
     ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
 
-    # Forzar remote a SSH y push
     git remote set-url origin git@github.com:jreb-123/k8s-lab-week1.git
     git pull origin $(Build.SourceBranchName) --rebase || true
     git push origin HEAD:$(Build.SourceBranchName)
   displayName: 'Update Helm values.yaml and push to GitHub via SSH'
   env:
     SSH_PRIVATE_KEY: $(SSH_PRIVATE_KEY)
-
-
-
-
