@@ -85,8 +85,8 @@ steps:
     command: 'upgrade'
     chartType: 'FilePath'
     chartPath: 'charts/app'
-    releaseName: '$(releaseName)'
-    namespace: '$(namespace)'
+    releaseName: '${{ variables.releaseName }}'
+    namespace: '${{ variables.namespace }}'
     overrideValues: 'image.repository=$(imageName),image.tag=$(tag)'
     install: true
     waitForExecution: true
