@@ -9,7 +9,7 @@ pool:
 
 variables:
   imageName: 'jrebaza01/app-week1'
-  tag: $(Build.SourceVersion)
+  # tag se define automáticamente por Build.SourceVersion
 
 steps:
 
@@ -24,13 +24,18 @@ steps:
     fi
   displayName: 'Set releaseName and namespace dynamically'
 
-# 2️⃣ Debug (verify variables)
+# 2️⃣ Debug variables
 - script: |
     echo "releaseName=$(releaseName)"
     echo "namespace=$(namespace)"
   displayName: 'Debug variables'
 
-# 3️⃣ Update Helm values.yaml and push to GitHub via SSH (bloque seguro)
+# 3️⃣ Checkout repository usando PAT
+- checkout: self
+  persistCredentials: true
+  displayName: 'Checkout repository using PAT'
+
+# 4️⃣ Update Helm values.yaml
 - bash: |
     echo "=== 🔧 Updating values.yaml for branch $(Build.SourceBranchName) ==="
 
@@ -40,7 +45,7 @@ steps:
       envPath="envs/prod/values.yaml"
     fi
 
-    # Actualizar values.yaml (sin tag si no lo quieres)
+    # Actualiza values.yaml (sin tag si quieres evitar problemas)
     sed -i "s|tag: .*|tag: latest|" $envPath || echo "No tag found, skipping"
 
     git config user.email "pipeline@azuredevops.local"
@@ -48,24 +53,11 @@ steps:
     git add $envPath
     git commit -m "Update values.yaml for $(Build.SourceBranchName)" || echo "No changes to commit"
 
-    # ✅ Setup ssh-agent correctamente
-    mkdir -p ~/.ssh
-    echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
-    chmod 600 ~/.ssh/id_rsa
-
-    eval "$(ssh-agent -s)"
-    ssh-add ~/.ssh/id_rsa
-
-    ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-
-    git remote set-url origin git@github.com:jreb-123/k8s-lab-week1.git
-    git pull origin $(Build.SourceBranchName) --rebase || true
+    # Push usando PAT
     git push origin HEAD:$(Build.SourceBranchName)
-  displayName: 'Update Helm values.yaml and push to GitHub via SSH'
-  env:
-    SSH_PRIVATE_KEY: $(SSH_PRIVATE_KEY)
+  displayName: 'Update Helm values.yaml and push to GitHub via PAT'
 
-# 4️⃣ Build Docker image
+# 5️⃣ Build Docker image
 - task: Docker@2
   displayName: 'Build Docker image'
   inputs:
@@ -73,23 +65,23 @@ steps:
     Dockerfile: '$(Build.SourcesDirectory)/app/Dockerfile'
     buildContext: '$(Build.SourcesDirectory)/app'
     tags: |
-      $(imageName):$(tag)
+      $(imageName):$(Build.SourceVersion)
 
-# 5️⃣ Push Docker image to Docker Hub
+# 6️⃣ Push Docker image to Docker Hub
 - task: Docker@2
   displayName: 'Push Docker image to Docker Hub'
   inputs:
     command: push
     tags: |
-      $(imageName):$(tag)
+      $(imageName):$(Build.SourceVersion)
 
-# 6️⃣ Debug (verify variables before deploy)
+# 7️⃣ Debug variables before Helm
 - script: |
     echo "releaseName=$(releaseName)"
     echo "namespace=$(namespace)"
   displayName: 'Debug variables before Helm'
 
-# 7️⃣ Deploy to Kubernetes via Helm
+# 8️⃣ Deploy to Kubernetes via Helm
 - task: HelmDeploy@0
   displayName: 'Deploy to Kubernetes via Helm'
   inputs:
@@ -100,12 +92,12 @@ steps:
     chartPath: 'charts/app'
     releaseName: '$(releaseName)'
     namespace: '$(namespace)'
-    overrideValues: 'image.repository=$(imageName),image.tag=$(tag)'
+    overrideValues: 'image.repository=$(imageName),image.tag=latest'
     install: true
     waitForExecution: true
     arguments: '--create-namespace'
 
-# 8️⃣ Rollback if Helm deployment fails
+# 9️⃣ Rollback if Helm deployment fails
 - script: |
     echo "Checking Helm deployment status..."
     helm status $(releaseName) -n $(namespace) || (
@@ -113,4 +105,3 @@ steps:
       helm rollback $(releaseName) 0 -n $(namespace)
     )
   displayName: 'Check deployment / Rollback if needed'
-
