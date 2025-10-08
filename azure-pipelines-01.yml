@@ -9,7 +9,7 @@ steps:
       ssh -T git@github.com
 
       echo "=== Probando clonación de repositorio ==="
-      git clone git@github.com:jreb-123.k8s-lab-week.git
+      git clone git@github.com/jreb-123/k8s-lab-week1.git
 
       echo "=== Repositorio clonado correctamente ==="
     displayName: "Test SSH & GitHub Clone"
