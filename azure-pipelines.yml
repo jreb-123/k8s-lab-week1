@@ -58,21 +58,22 @@ steps:
     git add $envPath
     git commit -m "Update image tag to $(tag)" || echo "No changes to commit"
 
-    # --- 🔑 Configurar clave SSH desde variable secreta Base64 ---
+    # --- 🔑 Configurar clave SSH desde variable secreta ---
     mkdir -p ~/.ssh
-    echo "$SSH_PRIVATE_KEY" | base64 --decode > ~/.ssh/id_ed25519
+    echo "$SSH_PRIVATE_KEY" | sed 's/\\n/\n/g' > ~/.ssh/id_ed25519
     chmod 600 ~/.ssh/id_ed25519
 
     eval "$(ssh-agent -s)"
     ssh-add ~/.ssh/id_ed25519
 
+    # Evitar prompt de autenticación
     ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
 
     # --- ✅ Push via SSH ---
     git remote set-url origin git@github.com:jreb-123/k8s-lab-week1.git
-
     git pull origin $(Build.SourceBranchName) --rebase || true
     git push origin HEAD:$(Build.SourceBranchName)
+
   displayName: 'Update Helm values.yaml and push to GitHub via SSH'
   env:
     SSH_PRIVATE_KEY: $(SSH_PRIVATE_KEY)
@@ -101,3 +102,4 @@ steps:
       helm rollback $(releaseName) 0 -n $(namespace)
     )
   displayName: 'Check deployment / Rollback if needed'
+
