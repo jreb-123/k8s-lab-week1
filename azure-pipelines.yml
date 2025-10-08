@@ -5,11 +5,7 @@ trigger:
       - main
 
 pool:
-  name: default  # agente Ubuntu
-
-variables:
-  imageName: 'jrebaza01/app-week1'
-  tag: $(Build.SourceVersion)
+  name: default
 
 steps:
 
@@ -24,88 +20,12 @@ steps:
     fi
   displayName: 'Set releaseName and namespace dynamically'
 
-# 2️⃣ Build Docker image
-- task: Docker@2
-  displayName: 'Build Docker image'
-  inputs:
-    command: build
-    Dockerfile: '$(Build.SourcesDirectory)/app/Dockerfile'
-    buildContext: '$(Build.SourcesDirectory)/app'
-    tags: |
-      $(imageName):$(tag)
-
-# 3️⃣ Push Docker image to Docker Hub
-- task: Docker@2
-  displayName: 'Push Docker image to Docker Hub'
-  inputs:
-    command: push
-    tags: |
-      $(imageName):$(tag)
-
-# 4️⃣ Update Helm values.yaml and push to GitHub via SSH
-- bash: |
-    echo "=== 🔧 Updating values.yaml for branch $(Build.SourceBranchName) with tag $(tag) ==="
-
-    if [ "$(Build.SourceBranchName)" == "dev" ]; then
-      envPath="envs/dev/values.yaml"
-    else
-      envPath="envs/prod/values.yaml"
-    fi
-
-    sed -i "s|tag: .*|tag: $(tag)|" $envPath
-
-    git config user.email "pipeline@azuredevops.local"
-    git config user.name "Azure Pipelines"
-    git add $envPath
-    git commit -m "Update image tag to $(tag)" || echo "No changes to commit"
-
-    # ✅ Setup ssh-agent properly every time
-    mkdir -p ~/.ssh
-    echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-    chmod 600 ~/.ssh/id_rsa
-
-    eval "$(ssh-agent -s)"
-    ssh-add ~/.ssh/id_rsa
-
-    ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-
-    git remote set-url origin git@github.com:jreb-123/k8s-lab-week1.git
-    git pull origin $(Build.SourceBranchName) --rebase || true
-    git push origin HEAD:$(Build.SourceBranchName)
-  displayName: 'Update Helm values.yaml and push to GitHub via SSH'
-  env:
-    SSH_PRIVATE_KEY: $(SSH_PRIVATE_KEY)
-
-# 5️⃣ Debug (verify variables before deploy)
+# 2️⃣ Debug (verify variables)
 - script: |
     echo "releaseName=$(releaseName)"
     echo "namespace=$(namespace)"
-  displayName: 'Debug variables before Helm'
+  displayName: 'Debug variables'
 
-# 6️⃣ Deploy to Kubernetes via Helm
-- task: HelmDeploy@0
-  displayName: 'Deploy to Kubernetes via Helm'
-  inputs:
-    connectionType: 'Kubernetes Service Connection'
-    kubernetesServiceConnection: 'aks-kubeconfig-connection'
-    command: 'upgrade'
-    chartType: 'FilePath'
-    chartPath: 'charts/app'
-    releaseName: '$(releaseName)'
-    namespace: '$(namespace)'
-    overrideValues: 'image.repository=$(imageName),image.tag=$(tag)'
-    install: true
-    waitForExecution: true
-    arguments: '--create-namespace'
-
-# 7️⃣ Rollback if Helm deployment fails
-- script: |
-    echo "Checking Helm deployment status..."
-    helm status $(releaseName) -n $(namespace) || (
-      echo "Deployment failed, rolling back..."
-      helm rollback $(releaseName) 0 -n $(namespace)
-    )
-  displayName: 'Check deployment / Rollback if needed'
 
 
 
