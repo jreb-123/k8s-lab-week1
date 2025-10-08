@@ -27,26 +27,28 @@ steps:
   displayName: 'Debug variables'
 
 # BLOQUE 2: Update Helm values.yaml and push to GitHub via SSH
+# BLOQUE 2: Update Helm values.yaml and push to GitHub via SSH (definitivo)
 - bash: |
-    set -e
-
     echo "=== 🔧 Updating values.yaml for branch $(Build.SourceBranchName) ==="
 
+    # Selección de envPath según branch
     if [ "$(Build.SourceBranchName)" == "dev" ]; then
       envPath="envs/dev/values.yaml"
     else
       envPath="envs/prod/values.yaml"
     fi
 
+    # Actualizamos el archivo (sin usar tag para evitar errores)
+    sed -i "s|tag: .*|tag: latest|" $envPath || echo "Archivo values.yaml ya actualizado"
+
     git config user.email "pipeline@azuredevops.local"
     git config user.name "Azure Pipelines"
-    git add "$envPath"
-    git commit -m "Update values.yaml" || echo "No changes to commit"
+    git add $envPath
+    git commit -m "Update values.yaml for $(Build.SourceBranchName)" || echo "No changes to commit"
 
+    # ✅ Configuración SSH segura
     mkdir -p ~/.ssh
-
-    # ✅ Decodificar Base64 correctamente
-    echo "$SSH_PRIVATE_KEY" | tr -d '\r' | base64 -d > ~/.ssh/id_rsa
+    echo "$SSH_PRIVATE_KEY" | tr -d '\r' | base64 --decode > ~/.ssh/id_rsa
     chmod 600 ~/.ssh/id_rsa
 
     eval "$(ssh-agent -s)"
@@ -54,6 +56,7 @@ steps:
 
     ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
 
+    # Push seguro a GitHub
     git remote set-url origin git@github.com:jreb-123/k8s-lab-week1.git
     git pull origin $(Build.SourceBranchName) --rebase || true
     git push origin HEAD:$(Build.SourceBranchName)
