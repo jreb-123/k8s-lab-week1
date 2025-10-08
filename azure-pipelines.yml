@@ -27,11 +27,11 @@ steps:
   displayName: 'Debug variables'
 
 # BLOQUE 2: Update Helm values.yaml and push to GitHub via SSH
-# BLOQUE 2: Update Helm values.yaml and push to GitHub via SSH
+# BLOQUE 2: Update Helm values.yaml and push to GitHub via SSH (sin tag)
 - bash: |
     set -e  # Salir si hay cualquier error
 
-    echo "=== 🔧 Updating values.yaml for branch $(Build.SourceBranchName) with tag $(tag) ==="
+    echo "=== 🔧 Updating values.yaml for branch $(Build.SourceBranchName) ==="
 
     # Elegir archivo según branch
     if [ "$(Build.SourceBranchName)" == "dev" ]; then
@@ -40,19 +40,14 @@ steps:
       envPath="envs/prod/values.yaml"
     fi
 
-    # Actualizar tag en values.yaml
-    sed -i "s|tag: .*|tag: $(tag)|" "$envPath"
-    echo "✅ Updated $envPath with tag $(tag)"
-
-    # Configurar Git
+    # Hacer un commit vacío para registrar la acción si es necesario
     git config user.email "pipeline@azuredevops.local"
     git config user.name "Azure Pipelines"
     git add "$envPath"
-    git commit -m "Update image tag to $(tag)" || echo "No changes to commit"
+    git commit -m "Update values.yaml" || echo "No changes to commit"
 
     # Configurar SSH correctamente
     mkdir -p ~/.ssh
-    # Decodificar correctamente la variable base64
     echo "$SSH_PRIVATE_KEY" | tr -d '\r\n' | base64 --decode > ~/.ssh/id_rsa
     chmod 600 ~/.ssh/id_rsa
 
@@ -65,7 +60,7 @@ steps:
     # Asegurarse que origin apunta al repositorio correcto
     git remote set-url origin git@github.com:jreb-123/k8s-lab-week1.git
 
-    # Hacer pull para no tener conflictos y push del commit
+    # Pull + Push seguro
     git pull origin $(Build.SourceBranchName) --rebase || true
     git push origin HEAD:$(Build.SourceBranchName)
 
