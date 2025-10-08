@@ -28,33 +28,48 @@ steps:
 
 # BLOQUE 2: Update Helm values.yaml and push to GitHub via SSH
 - bash: |
-    echo "=== 🔧 Updating values.yaml for branch $(Build.SourceBranchName) with tag $(tag) ==="
+    set -e  # salir si hay error
+    echo "=== 🔧 Updating values.yaml for branch $BUILD_SOURCEBRANCHNAME with tag $tag ==="
 
-    if [ "$(Build.SourceBranchName)" == "dev" ]; then
+    # Determinar path de valores según rama
+    if [ "$BUILD_SOURCEBRANCHNAME" == "dev" ]; then
       envPath="envs/dev/values.yaml"
     else
       envPath="envs/prod/values.yaml"
     fi
 
-    sed -i "s|tag: .*|tag: $(tag)|" $envPath
+    # Actualizar tag en values.yaml
+    sed -i "s|tag: .*|tag: $tag|" "$envPath"
+    echo "✅ Updated $envPath with tag $tag"
 
+    # Configurar Git
     git config user.email "pipeline@azuredevops.local"
     git config user.name "Azure Pipelines"
-    git add $envPath
-    git commit -m "Update image tag to $(tag)" || echo "No changes to commit"
+    git add "$envPath"
+    git commit -m "Update image tag to $tag" || echo "No changes to commit"
 
-    # ✅ Setup ssh-agent properly
+    # Configurar SSH
     mkdir -p ~/.ssh
-    printf "%b" "$(SSH_PRIVATE_KEY)" | base64 --decode > ~/.ssh/id_rsa
+    chmod 700 ~/.ssh
+    echo "$SSH_PRIVATE_KEY" | base64 --decode > ~/.ssh/id_rsa
     chmod 600 ~/.ssh/id_rsa
 
     eval "$(ssh-agent -s)"
     ssh-add ~/.ssh/id_rsa
     ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
 
+    # Git remoto
     git remote set-url origin git@github.com:jreb-123/k8s-lab-week1.git
-    git pull origin $(Build.SourceBranchName) --rebase || true
-    git push origin HEAD:$(Build.SourceBranchName)
+
+    # Pull con rebase para evitar conflictos
+    git fetch origin "$BUILD_SOURCEBRANCHNAME"
+    git rebase origin/"$BUILD_SOURCEBRANCHNAME" || true
+
+    # Push seguro
+    git push origin HEAD:"$BUILD_SOURCEBRANCHNAME"
+    
+    echo "✅ Helm values.yaml updated and pushed successfully"
   displayName: 'Update Helm values.yaml and push to GitHub via SSH'
   env:
     SSH_PRIVATE_KEY: $(SSH_PRIVATE_KEY)
+    tag: $(Build.SourceVersion)
