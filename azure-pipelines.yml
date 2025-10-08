@@ -5,14 +5,15 @@ trigger:
       - main
 
 pool:
-  name: default  # Agente Ubuntu
+  name: default  # agente Ubuntu
 
 variables:
   imageName: 'jrebaza01/app-week1'
   tag: $(Build.SourceVersion)
 
 steps:
-# 1️⃣ Variables dinámicas según rama
+
+# 1️⃣ Set dynamic releaseName and namespace based on branch
 - script: |
     if [ "$(Build.SourceBranchName)" == "dev" ]; then
       echo "##vso[task.setvariable variable=releaseName]app-dev"
@@ -42,8 +43,8 @@ steps:
       $(imageName):$(tag)
 
 # 4️⃣ Update Helm values.yaml and push to GitHub via SSH
-- script: |
-    echo "Updating values.yaml for branch $(Build.SourceBranchName) with tag $(tag)..."
+- bash: |
+    echo "=== 🔧 Updating values.yaml for branch $(Build.SourceBranchName) with tag $(tag) ==="
 
     if [ "$(Build.SourceBranchName)" == "dev" ]; then
       envPath="envs/dev/values.yaml"
@@ -58,7 +59,7 @@ steps:
     git add $envPath
     git commit -m "Update image tag to $(tag)" || echo "No changes to commit"
 
-    # --- 🔑 Configurar clave SSH desde variable secreta ---
+    # ✅ Setup ssh-agent properly every time
     mkdir -p ~/.ssh
     echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
     chmod 600 ~/.ssh/id_rsa
@@ -75,7 +76,13 @@ steps:
   env:
     SSH_PRIVATE_KEY: $(SSH_PRIVATE_KEY)
 
-# 5️⃣ Deploy to Kubernetes via Helm
+# 5️⃣ Debug (verify variables before deploy)
+- script: |
+    echo "releaseName=$(releaseName)"
+    echo "namespace=$(namespace)"
+  displayName: 'Debug variables before Helm'
+
+# 6️⃣ Deploy to Kubernetes via Helm
 - task: HelmDeploy@0
   displayName: 'Deploy to Kubernetes via Helm'
   inputs:
@@ -84,14 +91,14 @@ steps:
     command: 'upgrade'
     chartType: 'FilePath'
     chartPath: 'charts/app'
-    releaseName: '${{ variables.releaseName }}'
-    namespace: '${{ variables.namespace }}'
+    releaseName: '$(releaseName)'
+    namespace: '$(namespace)'
     overrideValues: 'image.repository=$(imageName),image.tag=$(tag)'
     install: true
     waitForExecution: true
     arguments: '--create-namespace'
 
-# 6️⃣ Rollback si falla
+# 7️⃣ Rollback if Helm deployment fails
 - script: |
     echo "Checking Helm deployment status..."
     helm status $(releaseName) -n $(namespace) || (
@@ -99,5 +106,6 @@ steps:
       helm rollback $(releaseName) 0 -n $(namespace)
     )
   displayName: 'Check deployment / Rollback if needed'
+
 
 
