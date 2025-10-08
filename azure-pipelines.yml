@@ -60,14 +60,13 @@ steps:
 
     # --- 🔑 Configurar clave SSH desde variable secreta ---
     mkdir -p ~/.ssh
-    echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+    echo "$SSH_PRIVATE_KEY" | base64 --decode > ~/.ssh/id_ed25519
     chmod 600 ~/.ssh/id_ed25519
 
-    # Evitar prompt de autenticación
     ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-
     eval "$(ssh-agent -s)"
     ssh-add ~/.ssh/id_ed25519
+
 
     # --- ✅ Push via SSH ---
     git remote set-url origin git@github.com:jreb-123/k8s-lab-week1.git
