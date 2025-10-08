@@ -12,6 +12,7 @@ variables:
   tag: $(Build.SourceVersion)
 
 steps:
+
 # 1️⃣ Variables dinámicas según rama
 - script: |
     if [ "$(Build.SourceBranchName)" == "dev" ]; then
@@ -75,7 +76,14 @@ steps:
   env:
     SSH_PRIVATE_KEY: $(SSH_PRIVATE_KEY)
 
-# 5️⃣ Deploy to Kubernetes via Helm
+# 5️⃣ Debug (verificar variables antes del despliegue)
+- script: |
+    echo "Verificando variables antes del deploy..."
+    echo "releaseName=$(releaseName)"
+    echo "namespace=$(namespace)"
+  displayName: 'Debug variables before Helm'
+
+# 6️⃣ Deploy to Kubernetes via Helm
 - task: HelmDeploy@0
   displayName: 'Deploy to Kubernetes via Helm'
   inputs:
@@ -84,14 +92,14 @@ steps:
     command: 'upgrade'
     chartType: 'FilePath'
     chartPath: 'charts/app'
-    releaseName: '${{ variables.releaseName }}'
-    namespace: '${{ variables.namespace }}'
+    releaseName: '$(releaseName)'       # ✅ Corrección: se usa $( ) no ${{ }}
+    namespace: '$(namespace)'           # ✅ Corrección: se usa $( ) no ${{ }}
     overrideValues: 'image.repository=$(imageName),image.tag=$(tag)'
     install: true
     waitForExecution: true
     arguments: '--create-namespace'
 
-# 6️⃣ Rollback si falla
+# 7️⃣ Rollback si falla
 - script: |
     echo "Checking Helm deployment status..."
     helm status $(releaseName) -n $(namespace) || (
@@ -99,5 +107,6 @@ steps:
       helm rollback $(releaseName) 0 -n $(namespace)
     )
   displayName: 'Check deployment / Rollback if needed'
+
 
 
