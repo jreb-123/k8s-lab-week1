@@ -60,25 +60,22 @@ steps:
 
     # --- 🔑 Configurar clave SSH desde variable secreta ---
     mkdir -p ~/.ssh
-    echo "$SSH_PRIVATE_KEY" | sed 's/\\n/\n/g' > ~/.ssh/id_ed25519
-    chmod 600 ~/.ssh/id_ed25519
+    echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+    chmod 600 ~/.ssh/id_rsa
 
     eval "$(ssh-agent -s)"
-    ssh-add ~/.ssh/id_ed25519
+    ssh-add ~/.ssh/id_rsa
 
-    # Evitar prompt de autenticación
     ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
 
-    # --- ✅ Push via SSH ---
     git remote set-url origin git@github.com:jreb-123/k8s-lab-week1.git
     git pull origin $(Build.SourceBranchName) --rebase || true
     git push origin HEAD:$(Build.SourceBranchName)
-
   displayName: 'Update Helm values.yaml and push to GitHub via SSH'
   env:
     SSH_PRIVATE_KEY: $(SSH_PRIVATE_KEY)
 
-# 5️⃣ Deploy a Kubernetes via Helm
+# 5️⃣ Deploy to Kubernetes via Helm
 - task: HelmDeploy@0
   displayName: 'Deploy to Kubernetes via Helm'
   inputs:
@@ -87,8 +84,8 @@ steps:
     command: 'upgrade'
     chartType: 'FilePath'
     chartPath: 'charts/app'
-    releaseName: '$(releaseName)'
-    namespace: '$(namespace)'
+    releaseName: '${{ variables.releaseName }}'
+    namespace: '${{ variables.namespace }}'
     overrideValues: 'image.repository=$(imageName),image.tag=$(tag)'
     install: true
     waitForExecution: true
@@ -102,4 +99,5 @@ steps:
       helm rollback $(releaseName) 0 -n $(namespace)
     )
   displayName: 'Check deployment / Rollback if needed'
+
 
