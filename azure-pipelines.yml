@@ -42,6 +42,7 @@ steps:
       $(imageName):$(tag)
 
 # 4️⃣ Update Helm values.yaml and push to GitHub securely
+# 4️⃣ Update Helm values.yaml and push to GitHub via SSH
 - script: |
     echo "Updating values.yaml for branch $(Build.SourceBranchName) with tag $(tag)..."
 
@@ -55,18 +56,25 @@ steps:
 
     git config user.email "pipeline@azuredevops.local"
     git config user.name "Azure Pipelines"
+
+    # Configura SSH (usa tu clave creada en el agente)
+    mkdir -p ~/.ssh
+    eval "$(ssh-agent -s)"
+    ssh-add ~/.ssh/github
+
+    # Asegura el host de GitHub
+    ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+    # Cambia URL a SSH
+    git remote set-url origin git@github.com:jreb-123/k8s-lab-week1.git
+
+    # Actualiza y sube cambios
+    git pull origin $(Build.SourceBranchName) --rebase || echo "Nothing to rebase"
     git add $envPath
     git commit -m "Update image tag to $(tag)" || echo "No changes to commit"
-
-    # Pull público (sin token)
-    git pull origin $(Build.SourceBranchName) --rebase
-
-    # Push seguro usando token de Library
-    git remote set-url origin https://jreb-123:$G_TOKEN@github.com/jreb-123/k8s-lab-week1.git
     git push origin HEAD:$(Build.SourceBranchName)
-  displayName: 'Update Helm values.yaml and push to GitHub securely'
-  env:
-    G_TOKEN: $(G_TOKEN)  # <- Variable secreta de Library
+  displayName: 'Update Helm values.yaml and push to GitHub via SSH'
+
 
 # 5️⃣ Deploy a Kubernetes via Helm
 - task: HelmDeploy@0
