@@ -1,13 +1,12 @@
 trigger: none
 
 pool:
-  name: default  # tu agente Ubuntu
+  name: default
 
 variables:
-  SSH_PRIVATE_KEY: $(SSH_PRIVATE_KEY)  # tu variable de librería
+- group: SSH_PRIVATE_KEY   # tu variable group con SSH_PRIVATE_KEY
 
 steps:
-# 1️⃣ Configurar clave SSH
 - script: |
     echo "=== Configurando clave SSH ==="
     mkdir -p ~/.ssh
@@ -19,11 +18,15 @@ steps:
 
     ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
   displayName: 'Setup SSH key'
+  env:
+    SSH_PRIVATE_KEY: $(SSH_PRIVATE_KEY)
 
-# 2️⃣ Probar conexión a GitHub
 - script: |
     echo "=== Probando conexión a GitHub ==="
     ssh -T git@github.com || true
   displayName: 'Test GitHub SSH connection'
+  env:
+    SSH_PRIVATE_KEY: $(SSH_PRIVATE_KEY)
+
 
 
