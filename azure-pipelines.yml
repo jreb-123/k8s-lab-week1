@@ -27,29 +27,26 @@ steps:
   displayName: 'Debug variables'
 
 # BLOQUE 2: Update Helm values.yaml and push to GitHub via SSH
-# BLOQUE 2: Update Helm values.yaml and push to GitHub via SSH (sin tag)
-# BLOQUE 2: Update Helm values.yaml and push to GitHub via SSH (sin tag y sin base64)
 - bash: |
     set -e
 
     echo "=== 🔧 Updating values.yaml for branch $(Build.SourceBranchName) ==="
 
-    # Elegir archivo según branch
     if [ "$(Build.SourceBranchName)" == "dev" ]; then
       envPath="envs/dev/values.yaml"
     else
       envPath="envs/prod/values.yaml"
     fi
 
-    # Configurar Git
     git config user.email "pipeline@azuredevops.local"
     git config user.name "Azure Pipelines"
     git add "$envPath"
     git commit -m "Update values.yaml" || echo "No changes to commit"
 
-    # Configurar SSH
     mkdir -p ~/.ssh
-    echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+
+    # ✅ Decodificar Base64 correctamente
+    echo "$SSH_PRIVATE_KEY" | tr -d '\r' | base64 -d > ~/.ssh/id_rsa
     chmod 600 ~/.ssh/id_rsa
 
     eval "$(ssh-agent -s)"
@@ -57,11 +54,9 @@ steps:
 
     ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
 
-    # Push seguro
     git remote set-url origin git@github.com:jreb-123/k8s-lab-week1.git
     git pull origin $(Build.SourceBranchName) --rebase || true
     git push origin HEAD:$(Build.SourceBranchName)
-
   displayName: 'Update Helm values.yaml and push to GitHub via SSH'
   env:
     SSH_PRIVATE_KEY: $(SSH_PRIVATE_KEY)
