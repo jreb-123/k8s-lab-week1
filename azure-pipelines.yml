@@ -28,8 +28,9 @@ steps:
 
 # BLOQUE 2: Update Helm values.yaml and push to GitHub via SSH
 # BLOQUE 2: Update Helm values.yaml and push to GitHub via SSH (sin tag)
+# BLOQUE 2: Update Helm values.yaml and push to GitHub via SSH (sin tag y sin base64)
 - bash: |
-    set -e  # Salir si hay cualquier error
+    set -e
 
     echo "=== 🔧 Updating values.yaml for branch $(Build.SourceBranchName) ==="
 
@@ -40,27 +41,24 @@ steps:
       envPath="envs/prod/values.yaml"
     fi
 
-    # Hacer un commit vacío para registrar la acción si es necesario
+    # Configurar Git
     git config user.email "pipeline@azuredevops.local"
     git config user.name "Azure Pipelines"
     git add "$envPath"
     git commit -m "Update values.yaml" || echo "No changes to commit"
 
-    # Configurar SSH correctamente
+    # Configurar SSH
     mkdir -p ~/.ssh
-    echo "$SSH_PRIVATE_KEY" | tr -d '\r\n' | base64 --decode > ~/.ssh/id_rsa
+    echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
     chmod 600 ~/.ssh/id_rsa
 
     eval "$(ssh-agent -s)"
     ssh-add ~/.ssh/id_rsa
 
-    # Confiar en GitHub para evitar prompts
     ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
 
-    # Asegurarse que origin apunta al repositorio correcto
+    # Push seguro
     git remote set-url origin git@github.com:jreb-123/k8s-lab-week1.git
-
-    # Pull + Push seguro
     git pull origin $(Build.SourceBranchName) --rebase || true
     git push origin HEAD:$(Build.SourceBranchName)
 
