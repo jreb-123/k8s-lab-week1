@@ -1,52 +1,29 @@
-trigger: none  # Solo ejecutamos manualmente
+trigger: none
 
 pool:
-  name: default  # Agente Ubuntu
+  name: default  # tu agente Ubuntu
 
 variables:
-  testBranch: 'dev'  # la rama que quieras probar
   SSH_PRIVATE_KEY: $(SSH_PRIVATE_KEY)  # tu variable de librería
 
 steps:
-
-# 1️⃣ Debug agente y entorno
+# 1️⃣ Configurar clave SSH
 - script: |
-    whoami
-    pwd
-    ls -la
-  displayName: 'Debug initial environment'
-
-# 2️⃣ Setup SSH key y probar conexión
-- bash: |
-    echo "=== Probando conexión SSH a GitHub ==="
-
+    echo "=== Configurando clave SSH ==="
     mkdir -p ~/.ssh
-    echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+    printf "%s\n" "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
     chmod 600 ~/.ssh/id_rsa
 
     eval "$(ssh-agent -s)"
     ssh-add ~/.ssh/id_rsa
 
     ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+  displayName: 'Setup SSH key'
 
-    echo "Probando conexión a GitHub..."
-    ssh -T git@github.com
-  displayName: 'Setup SSH key and test GitHub connection'
-  env:
-    SSH_PRIVATE_KEY: $(SSH_PRIVATE_KEY)
+# 2️⃣ Probar conexión a GitHub
+- script: |
+    echo "=== Probando conexión a GitHub ==="
+    ssh -T git@github.com || true
+  displayName: 'Test GitHub SSH connection'
 
-# 3️⃣ Test git pull y push en rama de prueba
-- bash: |
-    git clone git@github.com:jreb-123/k8s-lab-week1.git test-repo
-    cd test-repo
-    git checkout $testBranch
-
-    # Crear un archivo de prueba para push
-    echo "Test $(date)" >> test.txt
-    git add test.txt
-    git commit -m "Test push from pipeline" || echo "No changes to commit"
-    git push origin $testBranch
-  displayName: 'Test git pull and push'
-  env:
-    SSH_PRIVATE_KEY: $(SSH_PRIVATE_KEY)
 
