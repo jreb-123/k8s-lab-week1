@@ -94,7 +94,7 @@ steps:
     namespace: '$(namespace)'
     overrideValues: 'image.repository=$(imageName),image.tag=latest'
     install: true
-    waitForExecution: true
+    waitForExecution: false
     arguments: '--create-namespace'
 
 # 9️⃣ Rollback if Helm deployment fail
