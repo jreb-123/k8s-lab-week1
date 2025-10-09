@@ -106,3 +106,4 @@ steps:
     namespace: 'dev'
     command: 'status'
     releaseName: 'app-dev'
+    arguments: '$(releaseName)' 
