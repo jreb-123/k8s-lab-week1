@@ -1,78 +1,108 @@
 trigger:
-- dev
+  branches:
+    include:
+      - dev
+      - main
 
 pool:
-  name: 'ubuntu-pool'
+  name: default  # agente Ubuntu
 
 variables:
-  imageRepository: 'jrebaza01/app-week1'
-  tag: 'latest'
-  helmChartPath: 'charts/app'
-  releaseName: 'app-dev'
-  namespace: 'dev'
+  imageName: 'jrebaza01/app-week1'
+  # tag se define automáticamente por Build.SourceVersion
 
-stages:
-- stage: Build
-  displayName: "Build & Push Docker Image"
-  jobs:
-  - job: Build
-    displayName: "Build Docker Image"
-    steps:
-    - task: Docker@2
-      displayName: "Build and Push Image to Docker Hub"
-      inputs:
-        command: 'buildAndPush'
-        repository: '$(imageRepository)'
-        dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
-        containerRegistry: 'dockerhub-connection'
-        tags: |
-          $(tag)
+steps:
 
-- stage: UpdateHelmValues
-  displayName: "Update Helm values.yaml and Push to GitHub"
-  jobs:
-  - job: UpdateHelm
-    displayName: "Update Helm values.yaml"
-    steps:
-    - script: |
-        echo "=== 🔧 Updating values.yaml for branch dev ==="
-        sed -i "s|repository:.*|repository: $(imageRepository)|" $(Build.SourcesDirectory)/charts/app/values.yaml
-        sed -i "s|tag:.*|tag: $(tag)|" $(Build.SourcesDirectory)/charts/app/values.yaml
-        git config --global user.email "devops@azure.com"
-        git config --global user.name "Azure DevOps"
-        git add charts/app/values.yaml
-        git commit -m "Update values.yaml for dev" || echo "No changes to commit"
-        git push
-      displayName: "Commit and Push values.yaml changes to GitHub"
-      env:
-        GITHUB_TOKEN: $(GITHUB_PAT)
+# 1️⃣ Set dynamic releaseName and namespace based on branch
+- script: |
+    if [ "$(Build.SourceBranchName)" == "dev" ]; then
+      echo "##vso[task.setvariable variable=releaseName]app-dev"
+      echo "##vso[task.setvariable variable=namespace]dev"
+    else
+      echo "##vso[task.setvariable variable=releaseName]app-prod"
+      echo "##vso[task.setvariable variable=namespace]prod"
+    fi
+  displayName: 'Set releaseName and namespace dynamically'
 
-- stage: Deploy
-  displayName: "Deploy to AKS via Helm"
-  jobs:
-  - job: Deploy
-    displayName: "Helm Deploy to AKS"
-    steps:
-    - task: HelmDeploy@0
-      displayName: "Deploy to Kubernetes via Helm"
-      inputs:
-        connectionType: 'Kubernetes Service Connection'
-        kubernetesServiceConnection: 'aks-kubeconfig-connection'
-        namespace: '$(namespace)'
-        command: 'upgrade'
-        chartType: 'FilePath'
-        chartPath: '$(helmChartPath)'
-        releaseName: '$(releaseName)'
-        overrideValues: 'image.repository=$(imageRepository),image.tag=$(tag)'
-        install: true
-        waitForExecution: false
+# 2️⃣ Debug variables
+- script: |
+    echo "releaseName=$(releaseName)"
+    echo "namespace=$(namespace)"
+  displayName: 'Debug variables'
 
-    - task: HelmDeploy@0
-      displayName: "Check deployment status"
-      inputs:
-        connectionType: 'Kubernetes Service Connection'
-        kubernetesServiceConnection: 'aks-kubeconfig-connection'
-        namespace: '$(namespace)'
-        command: 'status'
-        releaseName: '$(releaseName)'
+# 3️⃣ Checkout repository usando PAT
+- checkout: self
+  persistCredentials: true
+  displayName: 'Checkout repository using PAT'
 
+# 4️⃣ Update Helm values.yaml
+- bash: |
+    echo "=== 🔧 Updating values.yaml for branch $(Build.SourceBranchName) ==="
+
+    if [ "$(Build.SourceBranchName)" == "dev" ]; then
+      envPath="envs/dev/values.yaml"
+    else
+      envPath="envs/prod/values.yaml"
+    fi
+
+    # Actualiza values.yaml (sin tag si quieres evitar problemas)
+    sed -i "s|tag: .*|tag: latest|" $envPath || echo "No tag found, skipping"
+
+    git config user.email "pipeline@azuredevops.local"
+    git config user.name "Azure Pipelines"
+    git add $envPath
+    git commit -m "Update values.yaml for $(Build.SourceBranchName)" || echo "No changes to commit"
+
+    # Push usando PAT
+    git push origin HEAD:$(Build.SourceBranchName)
+  displayName: 'Update Helm values.yaml and push to GitHub via PAT'
+
+# 5️⃣ Build Docker image
+- task: Docker@2
+  displayName: 'Build Docker image'
+  inputs:
+    command: build
+    Dockerfile: '$(Build.SourcesDirectory)/app/Dockerfile'
+    buildContext: '$(Build.SourcesDirectory)/app'
+    tags: |
+      $(imageName):$(Build.SourceVersion)
+
+# 6️⃣ Push Docker image to Docker Hub
+- task: Docker@2
+  displayName: 'Push Docker image to Docker Hub'
+  inputs:
+    command: push
+    tags: |
+      $(imageName):$(Build.SourceVersion)
+
+# 7️⃣ Debug variables before Helm
+- script: |
+    echo "releaseName=$(releaseName)"
+    echo "namespace=$(namespace)"
+  displayName: 'Debug variables before Helm'
+
+# 8️⃣ Deploy to Kubernetes via Helm
+- task: HelmDeploy@0
+  displayName: 'Deploy to Kubernetes via Helm'
+  inputs:
+    connectionType: 'Kubernetes Service Connection'
+    kubernetesServiceConnection: 'aks-kubeconfig-connection'
+    command: 'upgrade'
+    chartType: 'FilePath'
+    chartPath: 'charts/app'
+    releaseName: '$(releaseName)'
+    namespace: '$(namespace)'
+    overrideValues: 'image.repository=$(imageName),image.tag=latest'
+    install: true
+    waitForExecution: false
+    arguments: '--create-namespace'
+
+# 9️⃣ Rollback if Helm deployment fail
+- task: HelmDeploy@0
+  displayName: "Check deployment status"
+  inputs:
+    connectionType: 'Kubernetes Service Connection'
+    kubernetesServiceConnection: 'aks-kubeconfig-connection'
+    namespace: '$(namespace)'
+    command: 'status'
+    releaseName: '$(releaseName)'
