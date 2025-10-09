@@ -97,16 +97,4 @@ steps:
     waitForExecution: false
     arguments: '--create-namespace'
 
-# ✅ 9️⃣ Check deployment status (fixed)
-- bash: |
-    echo "Checking Helm deployment status..."
-    helm status $(releaseName) -n $(namespace)
 
-    if [ $? -ne 0 ]; then
-      echo "Deployment failed, rolling back..."
-      helm rollback $(releaseName) 1 -n $(namespace)
-      exit 1
-    else
-      echo "✅ Deployment successful."
-    fi
-  displayName: "Check deployment / Rollback if needed"
