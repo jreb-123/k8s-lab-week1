@@ -16,11 +16,11 @@ steps:
 # 1️⃣ Set dynamic releaseName and namespace based on branch
 - script: |
     if [ "$(Build.SourceBranchName)" == "dev" ]; then
-      echo "##vso[task.setvariable variable=releaseName;isOutput=true]app-dev"
-      echo "##vso[task.setvariable variable=namespace;isOutput=true]dev"
+      echo "##vso[task.setvariable variable=releaseName]app-dev"
+      echo "##vso[task.setvariable variable=namespace]dev"
     else
-      echo "##vso[task.setvariable variable=releaseName;isOutput=true]app-prod"
-      echo "##vso[task.setvariable variable=namespace;isOutput=true]prod"
+      echo "##vso[task.setvariable variable=releaseName]app-prod"
+      echo "##vso[task.setvariable variable=namespace]prod"
     fi
   displayName: 'Set releaseName and namespace dynamically'
 
@@ -53,7 +53,7 @@ steps:
     git add $envPath
     git commit -m "Update values.yaml for $(Build.SourceBranchName)" || echo "No changes to commit"
 
-    # Push usando PAT (usa persistCredentials del checkout)
+    # Push usando PAT
     git push origin HEAD:$(Build.SourceBranchName)
   displayName: 'Update Helm values.yaml and push to GitHub via PAT'
 
@@ -97,15 +97,16 @@ steps:
     waitForExecution: false
     arguments: '--create-namespace'
 
-# ✅ 9️⃣ Check deployment status (CORREGIDO)
+# ✅ 9️⃣ Check deployment status (fixed)
 - bash: |
-    echo "🔍 Checking Helm deployment status for release: $(releaseName) in namespace: $(namespace)"
-    
-    # Mostrar releases disponibles (debug)
-    helm list -n $(namespace)
-
-    # Revisar estado exacto del release
+    echo "Checking Helm deployment status..."
     helm status $(releaseName) -n $(namespace)
-  displayName: "Check deployment status (fixed)"
-  env:
-    KUBECONFIG: /home/vsts/.kube/config
+
+    if [ $? -ne 0 ]; then
+      echo "Deployment failed, rolling back..."
+      helm rollback $(releaseName) 1 -n $(namespace)
+      exit 1
+    else
+      echo "✅ Deployment successful."
+    fi
+  displayName: "Check deployment / Rollback if needed"
