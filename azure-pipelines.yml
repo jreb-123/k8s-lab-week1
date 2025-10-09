@@ -97,7 +97,7 @@ steps:
     waitForExecution: true
     arguments: '--create-namespace'
 
-# 9️⃣ Rollback if Helm deployment fails
+# 9️⃣ Rollback if Helm deployment fail
 - script: |
     echo "Checking Helm deployment status..."
     helm status $(releaseName) -n $(namespace) || (
