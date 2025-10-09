@@ -5,38 +5,45 @@ trigger:
       - main
 
 pool:
-  name: default  # agente Ubuntu
+  name: default  # Nombre de tu pool/agent
 
 variables:
   imageName: 'jrebaza01/app-week1'
-  # tag se define automáticamente por Build.SourceVersion
+  # tag lo usamos con Build.SourceVersion en tiempo de ejecución
 
 steps:
 
-# 1️⃣ Set dynamic releaseName and namespace based on branch
+# 1️⃣ Calcula releaseName / namespace según rama (persistente para el job)
 - script: |
+    echo "=> Determinando releaseName/namespace según la rama: $(Build.SourceBranchName)"
     if [ "$(Build.SourceBranchName)" == "dev" ]; then
-      echo "##vso[task.setvariable variable=releaseName]app-dev"
-      echo "##vso[task.setvariable variable=namespace]dev"
+      echo "##vso[task.setvariable variable=RELEASE_NAME]app-dev"
+      echo "##vso[task.setvariable variable=NAMESPACE]dev"
     else
-      echo "##vso[task.setvariable variable=releaseName]app-prod"
-      echo "##vso[task.setvariable variable=namespace]prod"
+      echo "##vso[task.setvariable variable=RELEASE_NAME]app-prod"
+      echo "##vso[task.setvariable variable=NAMESPACE]prod"
     fi
   displayName: 'Set releaseName and namespace dynamically'
+  name: SetVars
 
-# 2️⃣ Debug variables
+# 2️⃣ Debug rápido para asegurarnos de que las variables existen (fallará si están vacías)
 - script: |
-    echo "releaseName=$(releaseName)"
-    echo "namespace=$(namespace)"
-  displayName: 'Debug variables'
+    echo "DEBUG: RELEASE_NAME = '$(RELEASE_NAME)'"
+    echo "DEBUG: NAMESPACE    = '$(NAMESPACE)'"
+    if [ -z "$(RELEASE_NAME)" ] || [ -z "$(NAMESPACE)" ]; then
+      echo "ERROR: RELEASE_NAME o NAMESPACE vacío. Abortando."
+      exit 1
+    fi
+  displayName: 'Debug variables (fail fast)'
 
-# 3️⃣ Checkout repository usando PAT
+# 3️⃣ Checkout del repo (usa persistCredentials para poder push con PAT)
 - checkout: self
   persistCredentials: true
-  displayName: 'Checkout repository using PAT'
+  displayName: 'Checkout repository'
 
-# 4️⃣ Update Helm values.yaml
+# 4️⃣ Actualiza envs/*/values.yaml y push a GitHub usando PAT (evita SSH)
 - bash: |
+    set -e
     echo "=== 🔧 Updating values.yaml for branch $(Build.SourceBranchName) ==="
 
     if [ "$(Build.SourceBranchName)" == "dev" ]; then
@@ -45,19 +52,24 @@ steps:
       envPath="envs/prod/values.yaml"
     fi
 
-    # Actualiza values.yaml (sin tag si quieres evitar problemas)
-    sed -i "s|tag: .*|tag: latest|" $envPath || echo "No tag found, skipping"
+    # Actualiza tag (si no quieres tag simplemente usa 'latest' fijo)
+    sed -i "s|tag: .*|tag: $(Build.SourceVersion)|" "$envPath" || true
 
     git config user.email "pipeline@azuredevops.local"
     git config user.name "Azure Pipelines"
-    git add $envPath
-    git commit -m "Update values.yaml for $(Build.SourceBranchName)" || echo "No changes to commit"
+    git add "$envPath"
+    git commit -m "Update values.yaml for $(Build.SourceBranchName) -> $(Build.SourceVersion)" || echo "No changes to commit"
 
     # Push usando PAT
+    # Nota: GITHUB_PAT debe ser una Variable de pipeline (secret).
+    git remote set-url origin https://$(GITHUB_PAT)@github.com/jreb-123/k8s-lab-week1.git
+    git pull origin $(Build.SourceBranchName) --rebase || true
     git push origin HEAD:$(Build.SourceBranchName)
   displayName: 'Update Helm values.yaml and push to GitHub via PAT'
+  env:
+    GITHUB_PAT: $(GITHUB_PAT)
 
-# 5️⃣ Build Docker image
+# 5️⃣ Build Docker image (ajusta containerRegistry si usas conexión distinta)
 - task: Docker@2
   displayName: 'Build Docker image'
   inputs:
@@ -67,7 +79,7 @@ steps:
     tags: |
       $(imageName):$(Build.SourceVersion)
 
-# 6️⃣ Push Docker image to Docker Hub
+# 6️⃣ Push Docker image to Docker Hub (ajusta containerRegistry)
 - task: Docker@2
   displayName: 'Push Docker image to Docker Hub'
   inputs:
@@ -75,13 +87,14 @@ steps:
     tags: |
       $(imageName):$(Build.SourceVersion)
 
-# 7️⃣ Debug variables before Helm
+# 7️⃣ Debug variables antes de Helm (útil para logs)
 - script: |
-    echo "releaseName=$(releaseName)"
-    echo "namespace=$(namespace)"
+    echo "PRE-HELM: RELEASE_NAME='$(RELEASE_NAME)'"
+    echo "PRE-HELM: NAMESPACE='$(NAMESPACE)'"
+    echo "PRE-HELM: IMAGE='$(imageName):$(Build.SourceVersion)'"
   displayName: 'Debug variables before Helm'
 
-# 8️⃣ Deploy to Kubernetes via Helm
+# 8️⃣ Deploy a AKS via Helm (upgrade --install). NO wait para evitar timeouts largos.
 - task: HelmDeploy@0
   displayName: 'Deploy to Kubernetes via Helm'
   inputs:
@@ -90,19 +103,19 @@ steps:
     command: 'upgrade'
     chartType: 'FilePath'
     chartPath: 'charts/app'
-    releaseName: '$(releaseName)'
-    namespace: '$(namespace)'
-    overrideValues: 'image.repository=$(imageName),image.tag=latest'
+    releaseName: '$(RELEASE_NAME)'
+    namespace: '$(NAMESPACE)'
+    overrideValues: 'image.repository=$(imageName),image.tag=$(Build.SourceVersion)'
     install: true
     waitForExecution: false
     arguments: '--create-namespace'
 
-# 9️⃣ Rollback if Helm deployment fail
+# 9️⃣ Comprobación del estado del release (usa HelmDeploy status — con RELEASE_NAME ya establecido)
 - task: HelmDeploy@0
-  displayName: "Check deployment status"
+  displayName: 'Check deployment status (helm status)'
   inputs:
     connectionType: 'Kubernetes Service Connection'
     kubernetesServiceConnection: 'aks-kubeconfig-connection'
-    namespace: '$(namespace)'
     command: 'status'
-    releaseName: '$(releaseName)'
+    releaseName: '$(RELEASE_NAME)'
+    namespace: '$(NAMESPACE)'
